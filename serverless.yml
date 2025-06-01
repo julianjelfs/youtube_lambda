@@ -16,6 +16,7 @@ provider:
         - GET
         - OPTIONS
         - POST
+
   environment:
     OC_PUBLIC: ${env:OC_PUBLIC}
     IDENTITY_PRIVATE: ${env:IDENTITY_PRIVATE}
