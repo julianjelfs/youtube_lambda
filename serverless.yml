@@ -47,6 +47,15 @@ functions:
           path: /notify
           method: post
 
+  poll:
+    handler: src/poll.poll
+    events:
+      - httpApi:
+          path: /poll
+          method: get
+      # - schedule:
+      #     rate: rate(10 minutes)
+
 plugins:
 
 custom:
