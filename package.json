@@ -1,0 +1,23 @@
+{
+  "name": "youtube_lambda",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.149",
+    "serverless": "^4.15.1",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@open-ic/openchat-botclient-ts": "^1.0.34",
+    "firebase-admin": "^13.4.0",
+    "googleapis": "^148.0.0",
+    "rss-parser": "^3.13.0"
+  }
+}

@@ -1,0 +1,57 @@
+service: youtube-lambda
+
+frameworkVersion: "4"
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: eu-west-2 # or your preferred region
+  httpApi:
+    cors:
+      allowedOrigins:
+        - "*"
+      allowedHeaders:
+        - "*"
+      allowedMethods:
+        - GET
+        - OPTIONS
+        - POST
+  environment:
+    OC_PUBLIC: ${env:OC_PUBLIC}
+    IDENTITY_PRIVATE: ${env:IDENTITY_PRIVATE}
+    IC_HOST: ${env:IC_HOST}
+    STORAGE_INDEX_CANISTER: ${env:STORAGE_INDEX_CANISTER}
+    YOUTUBE_API_KEY: ${env:YOUTUBE_API_KEY}
+    FIREBASE_SERVICE_ACCOUNT_JSON: ${env:FIREBASE_SERVICE_ACCOUNT_JSON}
+    FIREBASE_COLLECTION: ${env:FIREBASE_COLLECTION}
+
+functions:
+  botDefinition:
+    handler: src/definition.definition
+    events:
+      - httpApi:
+          path: /bot_definition
+          method: get
+
+  executeCommand:
+    handler: src/execute.command
+    events:
+      - httpApi:
+          path: /execute_command
+          method: post
+
+  notify:
+    handler: src/notify.notify
+    events:
+      - httpApi:
+          path: /notify
+          method: post
+
+plugins:
+
+custom:
+  esbuild:
+    bundle: true
+    target: node20
+    platform: node
+    sourcemap: true
