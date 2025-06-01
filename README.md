@@ -29,3 +29,5 @@ This command will immediately check all of the subscriptions in this context and
 Yes, it is a bit annoying that we have to use channel IDs to subscribe the channels but this is most unambiguous and reliable option.
 
 To find the Channel ID for a YouTube channel, select the channel in YouTube, click "...more", scroll down to the bottom of the popup and click "Share channel" and choose "Copy channel ID".
+
+![alt text](find_channel_id.png)
