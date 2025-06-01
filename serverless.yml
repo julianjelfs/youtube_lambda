@@ -59,9 +59,10 @@ functions:
 
 plugins:
 
-custom:
+build:
   esbuild:
     bundle: true
+    minify: true
+    sourcemap: false
     target: node20
     platform: node
-    sourcemap: true
