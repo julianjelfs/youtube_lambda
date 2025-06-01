@@ -215,6 +215,8 @@ class Subscriptions {
 
   async #persistState() {
     try {
+      // TODO we should use a firestore transaction for this otherwise we
+      // might end up in an inconsistent state
       writeInstallationRegistry(this.#installs.toMap());
       writeSubscriptions(this.#subscriptions);
     } catch (err) {
@@ -222,6 +224,14 @@ class Subscriptions {
     }
   }
 
+  // TODO I think we should consider a different structure where we just store
+  // Channels: { channel_id: { sub_count: number, last_updated: number } }
+  // Subscriptions: { scope: Set<channel_id> }
+  // InstallationRegistry
+  // it would make it much easier to build the queue. It also stores the last_updated
+  // against the channel rather than the subscription which is more correct
+  // We could also prioritise channels with more subscribers
+  // Worth getting this right before release.
   async #processQueue() {
     const queue: [Subscription, SerialisedScope][] = [];
     for (const [scopeStr, subscriptions] of this.#subscriptions) {
