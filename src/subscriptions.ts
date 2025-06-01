@@ -109,14 +109,9 @@ class Subscriptions {
 
   list(scope: ChatActionScope): Subscription[] {
     const subs = this.#subscriptions.get(scope.toString());
-    if (subs === undefined) {
-      console.log(
-        "We didn't find and subscriptions for the following scope",
-        scope
-      );
-      return [];
-    }
-    return [...subs].map((s) => this.#subscriptionFromString(s));
+    return subs === undefined
+      ? []
+      : [...subs].map((s) => this.#subscriptionFromString(s));
   }
 
   subscribe(youtubeChannelId: string, scope: ChatActionScope): boolean {

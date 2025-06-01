@@ -13,7 +13,7 @@ export async function list(
     subs.length === 0
       ? "You are not currently subscribed to any youtube channels"
       : formatSubscriptionsList(subs);
-  const msg = await (await client.createTextMessage(txt)).setFinalised(true);
+  const msg = (await client.createTextMessage(txt)).setFinalised(true);
   client
     .sendMessage(msg)
     .catch((err) =>

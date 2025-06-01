@@ -1,49 +1,31 @@
-import { cert, initializeApp } from "firebase-admin/app";
-import { DocumentSnapshot, getFirestore } from "firebase-admin/firestore";
+import { cert, getApp, getApps, initializeApp } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
 
-export function getFirebaseDb() {
+function initFirebaseApp() {
+  if (getApps().length > 0) return getApp();
+
   const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
   if (!json) {
-    console.error(
-      "FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set!"
-    );
+    console.error("FIREBASE_SERVICE_ACCOUNT_JSON is not set");
     process.exit(1);
   }
 
-  try {
-    const serviceAccount = JSON.parse(json);
-    serviceAccount.private_key = serviceAccount.private_key.replace(
-      /\\n/g,
-      "\n"
-    );
+  const serviceAccount = JSON.parse(json);
+  serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
 
-    initializeApp({
-      credential: cert(serviceAccount),
-    });
-
-    return getFirestore();
-  } catch (error) {
-    console.error(
-      "Failed to parse service account JSON or initialize Firebase:",
-      error
-    );
-    process.exit(1);
-  }
+  return initializeApp({
+    credential: cert(serviceAccount),
+  });
 }
 
-let db: FirebaseFirestore.Firestore | undefined = undefined;
-function getDb(): FirebaseFirestore.Firestore {
-  if (db) return db;
-  db = getFirebaseDb();
-  return db;
-}
+const app = initFirebaseApp();
+const db = getFirestore(app);
 
 export async function writeSubscriptions(
   subs: Map<string, Set<string>>
 ): Promise<void> {
   try {
-    const db = getDb();
     const docRef = db
       .collection(`/${process.env.FIREBASE_COLLECTION!}`)
       .doc("subscriptions");
@@ -62,7 +44,6 @@ export async function writeInstallationRegistry(
   installs: Map<string, string>
 ): Promise<void> {
   try {
-    const db = getDb();
     const docRef = db
       .collection(`/${process.env.FIREBASE_COLLECTION!}`)
       .doc("installation_registry");
@@ -79,11 +60,10 @@ export async function writeInstallationRegistry(
 
 export async function readSubscriptions(): Promise<Map<string, Set<string>>> {
   try {
-    const db = getDb();
     const docRef = db
       .collection(`/${process.env.FIREBASE_COLLECTION!}`)
       .doc("subscriptions");
-    const docSnap: DocumentSnapshot = await docRef.get();
+    const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
       console.log("subscriptionss document not found");
@@ -119,11 +99,10 @@ export async function readSubscriptions(): Promise<Map<string, Set<string>>> {
 
 export async function readInstallationRegistry(): Promise<Map<string, string>> {
   try {
-    const db = getDb();
     const docRef = db
       .collection(`/${process.env.FIREBASE_COLLECTION!}`)
       .doc("installation_registry");
-    const docSnap: DocumentSnapshot = await docRef.get();
+    const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
       console.log("installation_registry document not found");
