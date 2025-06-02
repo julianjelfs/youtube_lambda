@@ -22,17 +22,8 @@ export type ChannelStats = {
   lastUpdated: number;
 };
 
-const nullStats: ChannelStats = {
-  youtubeChannelId: "",
-  subscribers: 0,
-  lastUpdated: 0,
-};
-
-function leastRecentlyUpdated(
-  a: [ChannelStats, SerialisedScope],
-  b: [ChannelStats, SerialisedScope]
-): number {
-  return a[0].lastUpdated - b[0].lastUpdated;
+function leastRecentlyUpdated(a: ChannelStats, b: ChannelStats): number {
+  return a.lastUpdated - b.lastUpdated;
 }
 
 class Subscriptions {
@@ -53,10 +44,9 @@ class Subscriptions {
     apiGateway: string,
     permissions: Permissions,
     scope: ChatActionScope,
-    stats: ChannelStats,
+    youtubeChannelId: string,
     msgTxt: string
   ): Promise<void> {
-    const { youtubeChannelId, lastUpdated } = stats;
     const client = this.factory.createClientInAutonomouseContext(
       scope,
       apiGateway,
@@ -67,7 +57,6 @@ class Subscriptions {
       console.debug(
         "Sending new content for channel",
         youtubeChannelId,
-        lastUpdated,
         msgTxt
       );
       const msg = await client.createTextMessage(msgTxt);
@@ -82,7 +71,12 @@ class Subscriptions {
         return resp;
       });
     } catch (err) {
-      console.error("Error processing subscription", scope, stats, err);
+      console.error(
+        "Error processing subscription",
+        scope,
+        youtubeChannelId,
+        err
+      );
       throw err;
     }
   }
@@ -199,24 +193,21 @@ class Subscriptions {
     const channels = this.#subscriptions.get(scopeStr);
     if (channels) {
       try {
-        const content: [ChannelStats, string | undefined][] = await Promise.all(
-          [...channels.values()].map(async (channelId) => {
-            const stats = this.#youtubeChannels.get(channelId) ?? nullStats;
-            const msgTxt = await getVideosSince(channelId, stats.lastUpdated);
-            this.#updateChannel(channelId, Date.now());
-            return [stats, msgTxt];
-          })
-        );
-        for (const [stats, msgTxt] of content) {
-          if (msgTxt !== undefined) {
-            await this.#sendNewContentForSubscription(
-              installation.apiGateway,
-              installation.grantedAutonomousPermissions,
-              scope,
-              stats,
-              msgTxt
-            );
-          }
+        for (const channelId of channels) {
+          const stats = this.#youtubeChannels.get(channelId);
+          if (stats === undefined) continue;
+
+          const msgTxt = await getVideosSince(channelId, stats.lastUpdated);
+          if (msgTxt === undefined) continue;
+
+          this.#updateChannel(channelId, Date.now());
+          await this.#sendNewContentForSubscription(
+            installation.apiGateway,
+            installation.grantedAutonomousPermissions,
+            scope,
+            channelId,
+            msgTxt
+          );
         }
       } catch (err) {
         console.error("Error processing subscriptions", err);
@@ -239,44 +230,65 @@ class Subscriptions {
     }
   }
 
+  #nextBatchOfChannels(): Map<string, number> {
+    const channels = [...this.#youtubeChannels.values()];
+    channels.sort(leastRecentlyUpdated);
+    const batch = new Map<string, number>();
+    for (const { youtubeChannelId, lastUpdated } of channels) {
+      batch.set(youtubeChannelId, lastUpdated);
+      if (batch.size >= BATCH_SIZE) {
+        return batch;
+      }
+    }
+    return batch;
+  }
+
+  // TODO - this could be a performance bottleneck
+  #createReverseLookup() {
+    const lookup = new Map<string, Set<string>>();
+    this.#subscriptions.forEach((subbed, scopeStr) => {
+      subbed.forEach((channelId) => {
+        const scopes = lookup.get(channelId) ?? new Set();
+        scopes.add(scopeStr);
+        lookup.set(channelId, scopes);
+      });
+    });
+    return lookup;
+  }
+
   async #processQueue() {
-    const queue: [ChannelStats, SerialisedScope][] = [];
-    for (const [scopeStr, channelIds] of this.#subscriptions) {
-      for (const channelId of channelIds) {
-        const stats = this.#youtubeChannels.get(channelId);
-        if (stats !== undefined) {
-          queue.push([stats, scopeStr]);
+    const lookup = this.#createReverseLookup();
+    const channels = this.#nextBatchOfChannels();
+    const newContent = await this.#getNewContentForBatch(channels);
+    const sendPromises: Promise<void>[] = [];
+    for (const [channelId, msgTxt] of newContent) {
+      const scopes = lookup.get(channelId);
+      if (scopes !== undefined) {
+        for (const scopeStr of scopes) {
+          const scope = ActionScope.fromString(scopeStr) as ChatActionScope;
+          const location = chatIdentifierToInstallationLocation(scope.chat);
+          const installation = this.#installs.get(location);
+          if (
+            installation === undefined ||
+            !installation.grantedAutonomousPermissions.hasMessagePermission(
+              "Text"
+            )
+          ) {
+            continue;
+          }
+          sendPromises.push(
+            this.#sendNewContentForSubscription(
+              installation.apiGateway,
+              installation.grantedAutonomousPermissions,
+              scope,
+              channelId,
+              msgTxt
+            )
+          );
         }
       }
     }
-    queue.sort(leastRecentlyUpdated);
-    const channels = this.#getBatchOfChannels(queue);
-    const newContent = await this.#getNewContentForBatch(channels);
-    const sendPromises: Promise<void>[] = [];
-    for (const [stats, scopeStr] of queue) {
-      const scope = ActionScope.fromString(scopeStr) as ChatActionScope;
-      const location = chatIdentifierToInstallationLocation(scope.chat);
-      const installation = this.#installs.get(location);
-      if (
-        installation === undefined ||
-        !installation.grantedAutonomousPermissions.hasMessagePermission("Text")
-      ) {
-        continue;
-      }
-      const msgTxt = newContent.get(stats.youtubeChannelId);
-      if (msgTxt) {
-        sendPromises.push(
-          this.#sendNewContentForSubscription(
-            installation.apiGateway,
-            installation.grantedAutonomousPermissions,
-            scope,
-            stats,
-            msgTxt
-          )
-        );
-      }
-    }
-    await Promise.all(sendPromises);
+    await sendPromises;
   }
 
   async #getNewContentForBatch(
@@ -286,30 +298,19 @@ class Subscriptions {
       "Checking for new content for the following channels: ",
       batch.keys()
     );
+    const timestamp = Date.now();
     const results = new Map<string, string>();
     await Promise.all(
       [...batch.entries()].map(([channelId, lastUpdated]) =>
         getVideosSince(channelId, lastUpdated).then((msg) => {
           if (msg !== undefined) {
             results.set(channelId, msg);
+            this.#updateChannel(channelId, timestamp);
           }
         })
       )
     );
     return results;
-  }
-
-  #getBatchOfChannels(
-    queue: [ChannelStats, SerialisedScope][]
-  ): Map<string, number> {
-    const batch = new Map<string, number>();
-    for (const [stats, _] of queue) {
-      batch.set(stats.youtubeChannelId, stats.lastUpdated);
-      if (batch.size >= BATCH_SIZE) {
-        return batch;
-      }
-    }
-    return batch;
   }
 
   async refresh() {
