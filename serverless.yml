@@ -54,8 +54,8 @@ functions:
       - httpApi:
           path: /poll
           method: get
-      # - schedule:
-      #     rate: rate(10 minutes)
+      - schedule:
+          rate: rate(10 minutes)
 
 plugins:
 

@@ -11,7 +11,7 @@ export async function subscribe(
   const scope = client.scope as ChatActionScope;
 
   if (channel) {
-    if (!subscriptions.subscribe(channel, scope)) {
+    if (!(await subscriptions.subscribe(channel, scope))) {
       return ephemeralResponse(
         client,
         "This bot does not seem to be installed in this scope at the moment"

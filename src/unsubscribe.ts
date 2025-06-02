@@ -11,7 +11,7 @@ export async function unsubscribe(
   const scope = client.scope as ChatActionScope;
 
   if (channel) {
-    if (!subscriptions.unsubscribe(channel, scope)) {
+    if (!(await subscriptions.unsubscribe(channel, scope))) {
       return ephemeralResponse(
         client,
         "It doesn't look like we have a subscription for that channel :shrugs:"

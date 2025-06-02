@@ -7,5 +7,6 @@ export const poll: APIGatewayProxyHandlerV2 = async (_) => {
   console.log("Refreshed all subscriptions");
   return {
     statusCode: 200,
+    message: "Refreshed all subscriptions",
   };
 };

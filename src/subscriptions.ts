@@ -123,7 +123,10 @@ class Subscriptions {
     }
   }
 
-  subscribe(youtubeChannelId: string, scope: ChatActionScope): boolean {
+  async subscribe(
+    youtubeChannelId: string,
+    scope: ChatActionScope
+  ): Promise<boolean> {
     try {
       const location = chatIdentifierToInstallationLocation(scope.chat);
       const installation = this.#installs.get(location);
@@ -143,16 +146,19 @@ class Subscriptions {
       }
       return false;
     } finally {
-      this.#persistState();
+      await this.#persistState();
     }
   }
 
-  install(location: InstallationLocation, record: InstallationRecord) {
+  async install(
+    location: InstallationLocation,
+    record: InstallationRecord
+  ): Promise<void> {
     this.#installs.set(location, record);
-    this.#persistState();
+    await this.#persistState();
   }
 
-  uninstall(location: InstallationLocation) {
+  async uninstall(location: InstallationLocation): Promise<void> {
     this.#installs.delete(location);
     this.#subscriptions.forEach((subs, scopeStr) => {
       const scope = ActionScope.fromString(scopeStr);
@@ -160,10 +166,13 @@ class Subscriptions {
         this.#subscriptions.delete(scopeStr);
       }
     });
-    this.#persistState();
+    await this.#persistState();
   }
 
-  unsubscribe(youtubeChannelId: string, scope: ChatActionScope): boolean {
+  async unsubscribe(
+    youtubeChannelId: string,
+    scope: ChatActionScope
+  ): Promise<boolean> {
     const scopeStr = scope.toString();
     const current = this.#subscriptions.get(scopeStr);
     if (current) {
@@ -174,7 +183,7 @@ class Subscriptions {
         if (current.size === 0) {
           this.#subscriptions.delete(scopeStr);
         }
-        this.#persistState();
+        await this.#persistState();
       }
     }
     return true;
@@ -212,15 +221,15 @@ class Subscriptions {
       } catch (err) {
         console.error("Error processing subscriptions", err);
       } finally {
-        this.#persistState();
+        await this.#persistState();
       }
       return true;
     }
   }
 
-  async #persistState() {
+  async #persistState(): Promise<void> {
     try {
-      writeAll(
+      await writeAll(
         this.#subscriptions,
         this.#youtubeChannels,
         this.#installs.toMap()
@@ -319,7 +328,7 @@ class Subscriptions {
     } catch (err) {
       console.error("Error processing subscriptions", err);
     } finally {
-      this.#persistState();
+      await this.#persistState();
     }
   }
 }

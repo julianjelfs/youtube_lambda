@@ -11,7 +11,7 @@ export const notify: APIGatewayProxyHandlerV2 = async (event) => {
     if (result.event.kind === "bot_installed_event") {
       await subscriptions.initialising;
       console.log("installing: ", result.event.location);
-      subscriptions.install(
+      await subscriptions.install(
         result.event.location,
         new InstallationRecord(
           result.apiGateway,
@@ -23,7 +23,7 @@ export const notify: APIGatewayProxyHandlerV2 = async (event) => {
     if (result.event.kind === "bot_uninstalled_event") {
       await subscriptions.initialising;
       console.log("uninstalling: ", result.event.location);
-      subscriptions.uninstall(result.event.location);
+      await subscriptions.uninstall(result.event.location);
     }
   } else if (result.kind === "bot_event_parse_failure") {
     console.error("Bot event parsing failed", result);

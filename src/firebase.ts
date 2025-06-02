@@ -32,17 +32,18 @@ export async function writeAll(
   channels: Map<string, ChannelStats>,
   installs: Map<string, string>
 ) {
-  await db.runTransaction(async (tx) => {
-    await writeChannelStats(tx, channels);
-    await writeSubscriptions(tx, subs);
-    await writeInstallationRegistry(tx, installs);
+  await db.runTransaction((tx) => {
+    writeChannelStats(tx, channels);
+    writeSubscriptions(tx, subs);
+    writeInstallationRegistry(tx, installs);
+    return Promise.resolve();
   });
 }
 
-async function writeChannelStats(
+function writeChannelStats(
   tx: Transaction,
   channels: Map<string, ChannelStats>
-): Promise<void> {
+): void {
   try {
     const docRef = db
       .collection(`/${process.env.FIREBASE_COLLECTION!}`)
@@ -58,10 +59,10 @@ async function writeChannelStats(
   }
 }
 
-async function writeSubscriptions(
+function writeSubscriptions(
   tx: Transaction,
   subs: Map<string, Set<string>>
-): Promise<void> {
+): void {
   try {
     const docRef = db
       .collection(`/${process.env.FIREBASE_COLLECTION!}`)
@@ -77,10 +78,10 @@ async function writeSubscriptions(
   }
 }
 
-async function writeInstallationRegistry(
+function writeInstallationRegistry(
   tx: Transaction,
   installs: Map<string, string>
-): Promise<void> {
+): void {
   try {
     const docRef = db
       .collection(`/${process.env.FIREBASE_COLLECTION!}`)
