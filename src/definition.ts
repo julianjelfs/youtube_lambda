@@ -28,16 +28,6 @@ function schema() {
       "This bot allows you to subscribe to a youtube channel and will post an update to your group or channel when a new video is posted",
     commands: [
       {
-        name: "hello",
-        default_role: "Participant",
-        description: "Say hello",
-        permissions: Permissions.encodePermissions({
-          ...emptyPermissions,
-          message: ["Text"],
-        }),
-        params: [],
-      },
-      {
         name: "list",
         default_role: "Participant",
         description:

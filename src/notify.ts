@@ -25,6 +25,15 @@ export const notify: APIGatewayProxyHandlerV2 = async (event) => {
       console.log("uninstalling: ", result.event.location);
       subscriptions.uninstall(result.event.location);
     }
+  } else if (result.kind === "bot_event_parse_failure") {
+    console.error("Bot event parsing failed", result);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        message: "Failed to parse bot event",
+        result,
+      }),
+    };
   }
   return {
     statusCode: 200,

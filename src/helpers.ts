@@ -10,7 +10,7 @@ import {
   Message,
 } from "@open-ic/openchat-botclient-ts";
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
-import { Subscription } from "./subscriptions";
+import { ChannelStats } from "./subscriptions";
 
 export function withBotClient(
   event: APIGatewayProxyEventV2,
@@ -62,7 +62,7 @@ export function createCommandChatClient(token: string): BotClient {
   return client;
 }
 
-export function formatSubscriptionsList(subscriptions: Subscription[]): string {
+export function formatSubscriptionsList(subscriptions: ChannelStats[]): string {
   return subscriptions
     .reduce(
       (msgs, sub) => {

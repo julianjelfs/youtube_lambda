@@ -6,13 +6,13 @@ import { subscriptions } from "./subscriptions";
 export async function list(
   client: BotClient
 ): Promise<APIGatewayProxyResultV2> {
-  await subscriptions.initialising;
   const scope = client.scope as ChatActionScope;
-  const subs = subscriptions.list(scope);
+  await subscriptions.initialising;
+  const channelStats = await subscriptions.list(scope);
   const txt =
-    subs.length === 0
+    channelStats.length === 0
       ? "You are not currently subscribed to any youtube channels"
-      : formatSubscriptionsList(subs);
+      : formatSubscriptionsList(channelStats);
   const msg = (await client.createTextMessage(txt)).setFinalised(true);
   client
     .sendMessage(msg)

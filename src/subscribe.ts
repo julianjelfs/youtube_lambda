@@ -14,7 +14,7 @@ export async function subscribe(
     if (!subscriptions.subscribe(channel, scope)) {
       return ephemeralResponse(
         client,
-        "We do not currently have a suitable api key for this command scope. Please generate an api key and sync it to the bot."
+        "This bot does not seem to be installed in this scope at the moment"
       );
     }
 
