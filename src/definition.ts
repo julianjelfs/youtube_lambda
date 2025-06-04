@@ -28,6 +28,32 @@ function schema() {
       "This bot allows you to subscribe to a youtube channel and will post an update to your group or channel when a new video is posted",
     commands: [
       {
+        name: "most_recent",
+        default_role: "Participant",
+        description:
+          "Get the most recent video for one of your subscribed channels.",
+        permissions: Permissions.encodePermissions({
+          ...emptyPermissions,
+          message: ["Text"],
+        }),
+        params: [
+          {
+            name: "channel_id",
+            required: true,
+            description: "The YouTube channel that you wish to check",
+            placeholder: "Enter the YouTube channel to check",
+            param_type: {
+              StringParam: {
+                min_length: 1,
+                max_length: 1000,
+                choices: [],
+                multi_line: false,
+              },
+            },
+          },
+        ],
+      },
+      {
         name: "list",
         default_role: "Participant",
         description:

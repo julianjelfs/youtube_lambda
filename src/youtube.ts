@@ -11,6 +11,16 @@ const youtube = google.youtube({
 // Which then turns this into a general purpose RSS bot, which is cool
 // We could then add a /youtube command which would accept an @username and return the RSS url (or just subscribe to them for you)
 
+export async function getMostRecentVideo(
+  channelId: string
+): Promise<string | undefined> {
+  let msgs = await getVideosSinceViaRSS(channelId, 0);
+  if (msgs === undefined) {
+    msgs = await getVideosSinceFromGoogle(channelId, 0);
+  }
+  return msgs?.[0];
+}
+
 export async function getVideosSince(channelId: string, since: number) {
   // prefer RSS
   let msgs = await getVideosSinceViaRSS(channelId, since);

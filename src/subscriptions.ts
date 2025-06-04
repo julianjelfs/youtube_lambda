@@ -10,7 +10,7 @@ import {
   Permissions,
 } from "@open-ic/openchat-botclient-ts";
 import { readAll, writeAll } from "./firebase";
-import { getVideosSince } from "./youtube";
+import { getMostRecentVideo, getVideosSince } from "./youtube";
 
 const BATCH_SIZE = 20;
 
@@ -79,6 +79,31 @@ class Subscriptions {
       );
       throw err;
     }
+  }
+
+  async mostRecent(
+    scope: ChatActionScope,
+    channelId: string
+  ): Promise<string | undefined> {
+    const location = chatIdentifierToInstallationLocation(scope.chat);
+    const installation = this.#installs.get(location);
+    if (
+      installation === undefined ||
+      !installation.grantedAutonomousPermissions.hasMessagePermission("Text")
+    ) {
+      return;
+    }
+
+    const channelIds = this.#subscriptions.get(scope.toString());
+    if (channelIds === undefined) return;
+
+    if (!channelIds.has(channelId)) return;
+
+    const stats = this.#youtubeChannels.get(channelId);
+    if (stats === undefined) return;
+
+    const msgTxt = await getMostRecentVideo(channelId);
+    return msgTxt;
   }
 
   async list(scope: ChatActionScope): Promise<ChannelStats[]> {
