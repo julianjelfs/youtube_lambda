@@ -109,7 +109,7 @@ class Subscriptions {
   async list(scope: ChatActionScope): Promise<ChannelStats[]> {
     const stats: ChannelStats[] = [];
 
-    withState(async (state) => {
+    await withState(async (state) => {
       const { subscriptions, youtubeChannels } = state;
       const channelIds = subscriptions.get(scope.toString());
       if (channelIds !== undefined) {

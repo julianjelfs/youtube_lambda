@@ -6,7 +6,6 @@ import { subscriptions } from "./subscriptions";
 export async function unsubscribe(
   client: BotClient
 ): Promise<APIGatewayProxyResultV2> {
-  await subscriptions.initialising;
   const channel = client.stringArg("channel_id");
   const scope = client.scope as ChatActionScope;
 

@@ -9,7 +9,6 @@ export const notify: APIGatewayProxyHandlerV2 = async (event) => {
   const result = parseBotNotification(event.body);
   if (result.kind === "bot_event_wrapper") {
     if (result.event.kind === "bot_installed_event") {
-      await subscriptions.initialising;
       console.log("installing: ", result.event.location);
       await subscriptions.install(
         result.event.location,
@@ -21,7 +20,6 @@ export const notify: APIGatewayProxyHandlerV2 = async (event) => {
       );
     }
     if (result.event.kind === "bot_uninstalled_event") {
-      await subscriptions.initialising;
       console.log("uninstalling: ", result.event.location);
       await subscriptions.uninstall(result.event.location);
     }

@@ -6,7 +6,6 @@ import { subscriptions } from "./subscriptions";
 export async function refreshCommand(
   client: BotClient
 ): Promise<APIGatewayProxyResultV2> {
-  await subscriptions.initialising;
   await subscriptions.refreshScope(client.scope as ChatActionScope);
   return ephemeralResponse(
     client,

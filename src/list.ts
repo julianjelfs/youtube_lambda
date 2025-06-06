@@ -7,7 +7,6 @@ export async function list(
   client: BotClient
 ): Promise<APIGatewayProxyResultV2> {
   const scope = client.scope as ChatActionScope;
-  await subscriptions.initialising;
   const channelStats = await subscriptions.list(scope);
   const txt =
     channelStats.length === 0
