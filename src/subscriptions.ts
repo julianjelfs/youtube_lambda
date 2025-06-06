@@ -311,7 +311,41 @@ class Subscriptions {
     return lookup;
   }
 
+  async #cleanup(state: State) {
+    for (const [scopeStr, channelIds] of state.subscriptions) {
+      const scope = ActionScope.fromString(scopeStr) as ChatActionScope;
+      const location = chatIdentifierToInstallationLocation(scope.chat);
+      const installation = state.installs.get(location);
+      if (installation !== undefined) {
+        const client = this.factory.createClientInAutonomouseContext(
+          scope,
+          installation.apiGateway,
+          installation.grantedAutonomousPermissions
+        );
+        for (const channelId of channelIds) {
+          const valid = /^UC[a-zA-Z0-9_-]{22}$/.test(channelId);
+          if (!valid) {
+            console.log(`Removing channel: `, channelId);
+
+            channelIds.delete(channelId);
+            this.#decrementChannel(state.youtubeChannels, channelId);
+            state.subscriptions.set(scopeStr, channelIds);
+            if (channelIds.size === 0) {
+              state.subscriptions.delete(scopeStr);
+            }
+
+            const msg = await client.createTextMessage(
+              `Sorry but I have unsubscribed you from "${channelId}" because it does not appear to be a valid Youtube channel ID. The channel ID should start with "UC" and be followed by 22 characters. For information on how to find the correct channel ID please refer to [the readme](https://github.com/julianjelfs/youtube_lambda/blob/main/README.md).`
+            );
+            await client.sendMessage(msg);
+          }
+        }
+      }
+    }
+  }
+
   async #processQueue(state: State) {
+    // await this.#cleanup(state);
     const lookup = this.#createReverseLookup(state.subscriptions);
     const channelsBatch = this.#nextBatchOfChannels(state.youtubeChannels);
     const newContent = await this.#getNewContentForBatch(

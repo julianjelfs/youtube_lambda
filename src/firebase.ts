@@ -28,6 +28,9 @@ function initFirebaseApp() {
 const app = initFirebaseApp();
 const db = getFirestore(app);
 
+// this all needs refactoring to store things in individual documents inside collections.
+// at the moment we are completely misusing firestore
+
 export async function withState(fn: (s: State) => Promise<void>) {
   await withTransaction(async (tx) => {
     const state = await readAll(tx);
