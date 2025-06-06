@@ -1,10 +1,11 @@
+import { InstallationRegistry } from "@open-ic/openchat-botclient-ts";
 import { cert, getApp, getApps, initializeApp } from "firebase-admin/app";
 import {
   DocumentSnapshot,
   getFirestore,
   Transaction,
 } from "firebase-admin/firestore";
-import { ChannelStats } from "./subscriptions";
+import { ChannelStats, State } from "./subscriptions";
 
 function initFirebaseApp() {
   if (getApps().length > 0) return getApp();
@@ -27,17 +28,26 @@ function initFirebaseApp() {
 const app = initFirebaseApp();
 const db = getFirestore(app);
 
-export async function writeAll(
-  subs: Map<string, Set<string>>,
-  channels: Map<string, ChannelStats>,
-  installs: Map<string, string>
-) {
-  await db.runTransaction((tx) => {
-    writeChannelStats(tx, channels);
-    writeSubscriptions(tx, subs);
-    writeInstallationRegistry(tx, installs);
-    return Promise.resolve();
+export async function withState(fn: (s: State) => Promise<void>) {
+  await withTransaction(async (tx) => {
+    const state = await readAll(tx);
+    try {
+      await fn(state);
+    } finally {
+      writeAll(tx, state);
+    }
   });
+}
+
+export async function withTransaction(fn: (tx: Transaction) => Promise<void>) {
+  await db.runTransaction(fn);
+}
+
+export async function writeAll(tx: Transaction, state: State) {
+  writeChannelStats(tx, state.youtubeChannels);
+  writeSubscriptions(tx, state.subscriptions);
+  writeInstallationRegistry(tx, state.installs.toMap());
+  return Promise.resolve();
 }
 
 function writeChannelStats(
@@ -127,23 +137,22 @@ function mapSubscriptions(doc: DocumentSnapshot): Map<string, Set<string>> {
   return result;
 }
 
-export async function readAll(): Promise<
-  [Map<string, Set<string>>, Map<string, ChannelStats>, Map<string, string>]
-> {
+export async function readAll(tx: Transaction): Promise<State> {
   const collection = db.collection(`/${process.env.FIREBASE_COLLECTION!}`);
   const subDoc = collection.doc("subscriptions");
   const channelsDoc = collection.doc("youtube_channels");
   const installsDoc = collection.doc("installation_registry");
-  const [subSnap, channelsSnap, installsSnap] = await db.getAll(
+  const [subSnap, channelsSnap, installsSnap] = await tx.getAll(
     subDoc,
     channelsDoc,
     installsDoc
   );
-  return [
-    mapSubscriptions(subSnap),
-    mapChannelStats(channelsSnap),
-    mapInstallData(installsSnap),
-  ];
+
+  return {
+    subscriptions: mapSubscriptions(subSnap),
+    youtubeChannels: mapChannelStats(channelsSnap),
+    installs: InstallationRegistry.fromMap(mapInstallData(installsSnap)),
+  };
 }
 
 function mapInstallData(doc: DocumentSnapshot): Map<string, string> {

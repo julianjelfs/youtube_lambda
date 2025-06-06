@@ -6,7 +6,6 @@ import { subscriptions } from "./subscriptions";
 export async function mostrecent(
   client: BotClient
 ): Promise<APIGatewayProxyResultV2> {
-  await subscriptions.initialising;
   const channelId = client.stringArg("channel_id");
   const scope = client.scope as ChatActionScope;
   if (channelId === undefined) {
