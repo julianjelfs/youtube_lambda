@@ -25,7 +25,7 @@ function schema() {
       }),
     },
     description:
-      "This bot allows you to subscribe to a youtube channel and will post an update to your group or channel when a new video is posted.",
+      "This bot allows you to subscribe to a youtube channel and will post an update to your group or channel when a new video is posted.\n\nFor usage intstructions please check [the readme](https://github.com/julianjelfs/youtube_lambda).",
     commands: [
       {
         name: "most_recent",
