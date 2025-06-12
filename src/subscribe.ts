@@ -1,7 +1,7 @@
 import { BotClient, ChatActionScope } from "@open-ic/openchat-botclient-ts";
 import { APIGatewayProxyResultV2 } from "aws-lambda";
+import { subscribe as dbSubscribe, withPool } from "./db/database";
 import { ephemeralResponse, formatChannelId } from "./helpers";
-import { subscriptions } from "./subscriptions";
 
 export async function subscribe(
   client: BotClient
@@ -18,7 +18,8 @@ export async function subscribe(
       );
     }
 
-    if (!(await subscriptions.subscribe(channel, scope))) {
+    const subscribed = await withPool(() => dbSubscribe(channel, scope));
+    if (!subscribed) {
       return ephemeralResponse(
         client,
         "This bot does not seem to be installed in this scope at the moment"

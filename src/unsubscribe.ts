@@ -1,7 +1,7 @@
 import { BotClient, ChatActionScope } from "@open-ic/openchat-botclient-ts";
 import { APIGatewayProxyResultV2 } from "aws-lambda";
+import { unsubscribe as dbUnsubscribe, withPool } from "./db/database";
 import { ephemeralResponse, formatChannelId } from "./helpers";
-import { subscriptions } from "./subscriptions";
 
 export async function unsubscribe(
   client: BotClient
@@ -10,12 +10,9 @@ export async function unsubscribe(
   const scope = client.scope as ChatActionScope;
 
   if (channel) {
-    if (!(await subscriptions.unsubscribe(channel, scope))) {
-      return ephemeralResponse(
-        client,
-        "It doesn't look like we have a subscription for that channel :shrugs:"
-      );
-    }
+    await withPool(async () => {
+      await dbUnsubscribe(channel, scope);
+    });
 
     return ephemeralResponse(
       client,

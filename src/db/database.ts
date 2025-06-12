@@ -10,7 +10,7 @@ import {
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import ws from "ws";
-import { ChannelStats } from "../subscriptions";
+import { ChannelStats } from "../types";
 import * as schema from "./schema";
 import { installations } from "./schema";
 

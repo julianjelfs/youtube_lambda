@@ -10,7 +10,7 @@ import {
   Message,
 } from "@open-ic/openchat-botclient-ts";
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
-import { ChannelStats } from "./subscriptions";
+import { ChannelStats } from "./types";
 
 export function withBotClient(
   event: APIGatewayProxyEventV2,
