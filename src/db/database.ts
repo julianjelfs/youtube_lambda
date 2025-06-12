@@ -1,0 +1,249 @@
+import { neonConfig, Pool } from "@neondatabase/serverless";
+import {
+  ActionScope,
+  ChatActionScope,
+  chatIdentifierToInstallationLocation,
+  InstallationLocation,
+  InstallationRecord,
+  Permissions,
+} from "@open-ic/openchat-botclient-ts";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import ws from "ws";
+import { ChannelStats } from "../subscriptions";
+import * as schema from "./schema";
+import { installations } from "./schema";
+
+neonConfig.webSocketConstructor = ws;
+const pool = new Pool({ connectionString: process.env.PG_CONNECTION });
+const db = drizzle({ client: pool, schema });
+
+type RawPermissions = {
+  chat: number;
+  community: number;
+  message: number;
+};
+
+export async function getInstallation(
+  scope: ChatActionScope
+): Promise<InstallationRecord | undefined> {
+  const location = chatIdentifierToInstallationLocation(scope.chat);
+  const locationKey = keyify(location);
+
+  // check that we are installed in this location
+  const install = await db.query.installations.findFirst({
+    where: (i, { eq }) => eq(i.location, locationKey),
+  });
+
+  if (install === undefined) return undefined;
+
+  return new InstallationRecord(
+    install.api_gateway,
+    new Permissions(install.commandPermissions as RawPermissions),
+    new Permissions(install.autonomousPermissions as RawPermissions)
+  );
+}
+
+export async function saveInstallation(
+  location: InstallationLocation,
+  record: InstallationRecord
+) {
+  const installation: typeof installations.$inferInsert = {
+    location: keyify(location),
+    api_gateway: record.apiGateway,
+    autonomousPermissions: record.grantedAutonomousPermissions.rawPermissions,
+    commandPermissions: record.grantedCommandPermissions,
+  };
+
+  await db.insert(installations).values(installation);
+}
+
+export async function uninstall(location: InstallationLocation) {
+  const key = keyify(location);
+  await db.delete(installations).where(eq(installations.location, key));
+}
+
+export async function subscribe(
+  channelId: string,
+  scope: ChatActionScope
+): Promise<boolean> {
+  const location = chatIdentifierToInstallationLocation(scope.chat);
+  const locationKey = keyify(location);
+  const scopeKey = keyify(scope);
+
+  // check that we are installed in this location
+  const install = await db.query.installations.findFirst({
+    where: (i, { eq }) => eq(i.location, locationKey),
+  });
+
+  if (install === undefined) {
+    return false;
+  }
+
+  await db.transaction(async (tx) => {
+    // insert subscription
+    await tx
+      .insert(schema.subscriptions)
+      .values({ location: locationKey, scope: scopeKey })
+      .onConflictDoNothing();
+
+    // insert youtube channel
+    await tx
+      .insert(schema.youtubeChannels)
+      .values({
+        youtube_channel: channelId,
+        last_updated: BigInt(new Date().getTime()),
+      })
+      .onConflictDoUpdate({
+        target: schema.youtubeChannels.youtube_channel,
+        set: { last_updated: BigInt(new Date().getTime()) },
+      });
+
+    // insert the link
+    await tx
+      .insert(schema.subscriptionChannels)
+      .values({ location: locationKey, scope: scopeKey, channel_id: channelId })
+      .onConflictDoNothing();
+  });
+
+  return true;
+}
+
+export async function unsubscribe(
+  youtubeChannelId: string,
+  scope: ChatActionScope
+) {
+  const location = chatIdentifierToInstallationLocation(scope.chat);
+  const locationKey = keyify(location);
+  const scopeKey = keyify(scope);
+  await db
+    .delete(schema.subscriptionChannels)
+    .where(
+      and(
+        eq(schema.subscriptionChannels.location, locationKey),
+        eq(schema.subscriptionChannels.scope, scopeKey),
+        eq(schema.subscriptionChannels.channel_id, youtubeChannelId)
+      )
+    );
+}
+
+export async function hasSubscription(
+  scope: ChatActionScope,
+  channeId: string
+): Promise<boolean> {
+  const location = chatIdentifierToInstallationLocation(scope.chat);
+  const locationKey = keyify(location);
+  const scopeKey = keyify(scope);
+  const sub = await db.query.subscriptionChannels.findFirst({
+    where: (i, { eq, and }) =>
+      and(
+        eq(i.location, locationKey),
+        eq(i.scope, scopeKey),
+        eq(i.channel_id, channeId)
+      ),
+  });
+  return sub !== undefined;
+}
+
+export async function withPool<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } finally {
+    await pool.end();
+  }
+}
+
+export async function updateYoutubeChannel(channelId, lastUpdated: bigint) {
+  await db
+    .update(schema.youtubeChannels)
+    .set({ last_updated: lastUpdated })
+    .where(eq(schema.youtubeChannels.youtube_channel, channelId));
+}
+
+export async function subscribedChannelIds(
+  scope: ChatActionScope
+): Promise<ChannelStats[]> {
+  const scopeKey = keyify(scope);
+  const rows = await db
+    .select({
+      channelId: schema.subscriptionChannels.channel_id,
+      lastUpdated: schema.youtubeChannels.last_updated,
+    })
+    .from(schema.subscriptionChannels)
+    .innerJoin(
+      schema.youtubeChannels,
+      eq(
+        schema.subscriptionChannels.channel_id,
+        schema.youtubeChannels.youtube_channel
+      )
+    )
+    .where(eq(schema.subscriptionChannels.scope, scopeKey));
+  return rows.map((r) => ({
+    youtubeChannelId: r.channelId,
+    lastUpdated: r.lastUpdated,
+    subscribers: 0,
+  }));
+}
+
+export async function pruneChannels() {
+  await db.execute(sql`
+        DELETE FROM "YOUTUBE_CHANNELS"
+        WHERE NOT EXISTS (
+          SELECT 1 FROM "SUBSCRIPTION_CHANNELS"
+          WHERE "SUBSCRIPTION_CHANNELS"."channel_id" = "YOUTUBE_CHANNELS"."youtube_channel"
+        )
+      `);
+}
+
+export async function updateChannelsLastUpdate(
+  channelIds: string[],
+  lastUpdated: bigint
+) {
+  db.update(schema.youtubeChannels)
+    .set({ last_updated: lastUpdated })
+    .where(inArray(schema.youtubeChannels.youtube_channel, channelIds));
+}
+
+export async function getBatchOfChannels() {
+  return db
+    .select({
+      channelId: schema.youtubeChannels.youtube_channel,
+      lastUpdated: schema.youtubeChannels.last_updated,
+    })
+    .from(schema.youtubeChannels)
+    .orderBy(asc(schema.youtubeChannels.last_updated))
+    .limit(50);
+}
+
+export async function getSubscriptionsForChannelIds(channelIds: string[]) {
+  const rows = await db
+    .select({
+      apiGateway: schema.installations.api_gateway,
+      autonomousPermissions: schema.installations.autonomousPermissions,
+      scope: schema.subscriptionChannels.scope,
+      channelId: schema.subscriptionChannels.channel_id,
+    })
+    .from(schema.installations)
+    .innerJoin(
+      schema.subscriptionChannels,
+      eq(schema.installations.location, schema.subscriptionChannels.location)
+    )
+    .where(inArray(schema.subscriptionChannels.channel_id, channelIds));
+
+  return rows.map((r) => ({
+    apiGateway: r.apiGateway,
+    autonomousPermissions: new Permissions(
+      r.autonomousPermissions as RawPermissions
+    ),
+    scope: ActionScope.fromString(unkeyify(r.scope)) as ChatActionScope,
+    channelId: r.channelId,
+  }));
+}
+
+function keyify(thing: unknown): string {
+  return Buffer.from(JSON.stringify(thing)).toString("base64url");
+}
+
+export function unkeyify(key: string): string {
+  return Buffer.from(key, "base64url").toString("utf8");
+}

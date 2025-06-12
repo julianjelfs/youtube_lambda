@@ -1,35 +1,38 @@
 import {
-  ActionScope,
   BotClientFactory,
   ChatActionScope,
-  chatIdentifierToInstallationLocation,
   InstallationLocation,
   InstallationRecord,
-  InstallationRegistry,
   OCErrorCode,
   Permissions,
 } from "@open-ic/openchat-botclient-ts";
-import { withState } from "./firebase";
+import {
+  getBatchOfChannels,
+  getInstallation,
+  getSubscriptionsForChannelIds,
+  hasSubscription,
+  pruneChannels,
+  saveInstallation,
+  subscribe,
+  subscribedChannelIds,
+  uninstall,
+  unsubscribe,
+  updateChannelsLastUpdate,
+  updateYoutubeChannel,
+  withPool,
+} from "./db/database";
 import { getMostRecentVideo, getVideosSince } from "./youtube";
 
 const BATCH_SIZE = 50;
 
-type SerialisedScope = string;
-
 export type ChannelStats = {
   youtubeChannelId: string;
   subscribers: number;
-  lastUpdated: number;
-};
-
-export type State = {
-  installs: InstallationRegistry;
-  subscriptions: Map<SerialisedScope, Set<string>>;
-  youtubeChannels: Map<string, ChannelStats>;
+  lastUpdated: bigint;
 };
 
 function leastRecentlyUpdated(a: ChannelStats, b: ChannelStats): number {
-  return a.lastUpdated - b.lastUpdated;
+  return Number(a.lastUpdated - b.lastUpdated);
 }
 
 class Subscriptions {
@@ -80,141 +83,37 @@ class Subscriptions {
     scope: ChatActionScope,
     channelId: string
   ): Promise<string | undefined> {
-    let msgTxt: string | undefined = undefined;
-
-    await withState(async (state) => {
-      const { installs, subscriptions, youtubeChannels } = state;
-      const location = chatIdentifierToInstallationLocation(scope.chat);
-      const installation = installs.get(location);
-      if (
-        installation === undefined ||
-        !installation.grantedAutonomousPermissions.hasMessagePermission("Text")
-      ) {
+    return withPool(async () => {
+      if (!(await hasSubscription(scope, channelId))) {
         return;
       }
-
-      const channelIds = subscriptions.get(scope.toString());
-      if (channelIds === undefined) return;
-
-      if (!channelIds.has(channelId)) return;
-
-      const stats = youtubeChannels.get(channelId);
-      if (stats === undefined) return;
-
-      msgTxt = await getMostRecentVideo(channelId);
+      return getMostRecentVideo(channelId);
     });
-    return msgTxt;
   }
 
   async list(scope: ChatActionScope): Promise<ChannelStats[]> {
-    const stats: ChannelStats[] = [];
-
-    await withState(async (state) => {
-      const { subscriptions, youtubeChannels } = state;
-      const channelIds = subscriptions.get(scope.toString());
-      if (channelIds !== undefined) {
-        for (const channelId of channelIds) {
-          const s = youtubeChannels.get(channelId);
-          if (s !== undefined) {
-            stats.push(s);
-          }
-        }
-      }
-    });
-
-    return stats;
-  }
-
-  #incrementChannel(
-    youtubeChannels: Map<string, ChannelStats>,
-    youtubeChannelId: string
-  ) {
-    const stats = youtubeChannels.get(youtubeChannelId) ?? {
-      youtubeChannelId,
-      subscribers: 0,
-      lastUpdated: Date.now(),
-    };
-    stats.subscribers += 1;
-    youtubeChannels.set(youtubeChannelId, stats);
-  }
-
-  #decrementChannel(
-    youtubeChannels: Map<string, ChannelStats>,
-    youtubeChannelId: string
-  ) {
-    const stats = youtubeChannels.get(youtubeChannelId);
-    if (stats !== undefined) {
-      stats.subscribers -= 1;
-      if (stats.subscribers === 0) {
-        youtubeChannels.delete(youtubeChannelId);
-      }
-    }
-  }
-
-  #updateChannel(
-    youtubeChannels: Map<string, ChannelStats>,
-    youtubeChannelId: string,
-    lastUpdated: number
-  ) {
-    const stats = youtubeChannels.get(youtubeChannelId);
-    if (stats) {
-      stats.lastUpdated = lastUpdated;
-      youtubeChannels.set(youtubeChannelId, stats);
-    }
+    return withPool(() => subscribedChannelIds(scope));
   }
 
   async subscribe(
     youtubeChannelId: string,
     scope: ChatActionScope
   ): Promise<boolean> {
-    // big problem with this - if two people subscribe concurrently
-    // the the last write will win and the other user's sub will be lost
-    // We need to use a firestore tx for the whole thing
-    let subscribed = false;
-
-    await withState(async (state) => {
-      const { installs, subscriptions, youtubeChannels } = state;
-      const location = chatIdentifierToInstallationLocation(scope.chat);
-      const installation = installs.get(location);
-      if (
-        installation === undefined ||
-        !installation.grantedAutonomousPermissions.hasMessagePermission("Text")
-      ) {
-        return;
-      }
-      const scopeStr = scope.toString();
-      const current = subscriptions.get(scopeStr) ?? new Set();
-      if (!current.has(youtubeChannelId)) {
-        current.add(youtubeChannelId);
-        this.#incrementChannel(youtubeChannels, youtubeChannelId);
-        subscriptions.set(scopeStr, current);
-        subscribed = true;
-        return;
-      }
-    });
-
-    return subscribed;
+    return withPool(() => subscribe(youtubeChannelId, scope));
   }
 
   async install(
     location: InstallationLocation,
     record: InstallationRecord
   ): Promise<void> {
-    await withState(async (state) => {
-      state.installs.set(location, record);
+    await withPool(async () => {
+      await saveInstallation(location, record);
     });
   }
 
   async uninstall(location: InstallationLocation): Promise<void> {
-    await withState(async (state) => {
-      const { installs, subscriptions } = state;
-      installs.delete(location);
-      subscriptions.forEach((subs, scopeStr) => {
-        const scope = ActionScope.fromString(scopeStr);
-        if (scope.isContainedBy(location)) {
-          subscriptions.delete(scopeStr);
-        }
-      });
+    await withPool(async () => {
+      await uninstall(location);
     });
   }
 
@@ -222,30 +121,16 @@ class Subscriptions {
     youtubeChannelId: string,
     scope: ChatActionScope
   ): Promise<boolean> {
-    await withState(async (state) => {
-      const { subscriptions, youtubeChannels } = state;
-      const scopeStr = scope.toString();
-      const current = subscriptions.get(scopeStr);
-      if (current) {
-        if (current.has(youtubeChannelId)) {
-          current.delete(youtubeChannelId);
-          this.#decrementChannel(youtubeChannels, youtubeChannelId);
-          subscriptions.set(scopeStr, current);
-          if (current.size === 0) {
-            subscriptions.delete(scopeStr);
-          }
-        }
-      }
+    await withPool(async () => {
+      await unsubscribe(youtubeChannelId, scope);
     });
     return true;
   }
 
   async refreshScope(scope: ChatActionScope) {
     let refreshed = true;
-    await withState(async (state) => {
-      const { installs, subscriptions, youtubeChannels } = state;
-      const location = chatIdentifierToInstallationLocation(scope.chat);
-      const installation = installs.get(location);
+    await withPool(async () => {
+      const installation = await getInstallation(scope);
       if (
         installation === undefined ||
         !installation.grantedAutonomousPermissions.hasMessagePermission("Text")
@@ -253,23 +138,22 @@ class Subscriptions {
         refreshed = false;
         return;
       }
-      const scopeStr = scope.toString();
-      const channels = subscriptions.get(scopeStr);
+
+      const channels = await subscribedChannelIds(scope);
+
       if (channels) {
         try {
-          for (const channelId of channels) {
-            const stats = youtubeChannels.get(channelId);
-            if (stats === undefined) continue;
-
-            const msgTxt = await getVideosSince(channelId, stats.lastUpdated);
+          for (const { youtubeChannelId, lastUpdated } of channels) {
+            const msgTxt = await getVideosSince(youtubeChannelId, lastUpdated);
             if (msgTxt === undefined) continue;
 
-            this.#updateChannel(youtubeChannels, channelId, Date.now());
+            await updateYoutubeChannel(youtubeChannelId, BigInt(Date.now()));
+
             await this.#sendNewContentForSubscription(
               installation.apiGateway,
               installation.grantedAutonomousPermissions,
               scope,
-              channelId,
+              youtubeChannelId,
               msgTxt
             );
           }
@@ -283,122 +167,57 @@ class Subscriptions {
     return refreshed;
   }
 
-  #nextBatchOfChannels(
-    youtubeChannels: Map<string, ChannelStats>
-  ): Map<string, number> {
-    const channels = [...youtubeChannels.values()];
-    channels.sort(leastRecentlyUpdated);
-    const batch = new Map<string, number>();
-    for (const { youtubeChannelId, lastUpdated } of channels) {
-      batch.set(youtubeChannelId, lastUpdated);
-      if (batch.size >= BATCH_SIZE) {
-        return batch;
-      }
-    }
-    return batch;
-  }
+  async #processQueue() {
+    await pruneChannels();
+    const channels = await getBatchOfChannels();
+    const newContent = await this.#getNewContentForBatch(channels);
+    const channelIdsWithUpdates = [...newContent.keys()];
+    await updateChannelsLastUpdate(channelIdsWithUpdates, BigInt(Date.now()));
 
-  // TODO - this could be a performance bottleneck
-  #createReverseLookup(subscriptions: Map<string, Set<string>>) {
-    const lookup = new Map<string, Set<string>>();
-    subscriptions.forEach((subbed, scopeStr) => {
-      subbed.forEach((channelId) => {
-        const scopes = lookup.get(channelId) ?? new Set();
-        scopes.add(scopeStr);
-        lookup.set(channelId, scopes);
-      });
-    });
-    return lookup;
-  }
-
-  async #cleanup(state: State) {
-    for (const [scopeStr, channelIds] of state.subscriptions) {
-      const scope = ActionScope.fromString(scopeStr) as ChatActionScope;
-      const location = chatIdentifierToInstallationLocation(scope.chat);
-      const installation = state.installs.get(location);
-      if (installation !== undefined) {
-        const client = this.factory.createClientInAutonomouseContext(
-          scope,
-          installation.apiGateway,
-          installation.grantedAutonomousPermissions
-        );
-        for (const channelId of channelIds) {
-          const valid = /^UC[a-zA-Z0-9_-]{22}$/.test(channelId);
-          if (!valid) {
-            console.log(`Removing channel: `, channelId);
-
-            channelIds.delete(channelId);
-            this.#decrementChannel(state.youtubeChannels, channelId);
-            state.subscriptions.set(scopeStr, channelIds);
-            if (channelIds.size === 0) {
-              state.subscriptions.delete(scopeStr);
-            }
-
-            const msg = await client.createTextMessage(
-              `Sorry but I have unsubscribed you from "${channelId}" because it does not appear to be a valid Youtube channel ID. The channel ID should start with "UC" and be followed by 22 characters. For information on how to find the correct channel ID please refer to [the readme](https://github.com/julianjelfs/youtube_lambda/blob/main/README.md).`
-            );
-            await client.sendMessage(msg);
-          }
-        }
-      }
-    }
-  }
-
-  async #processQueue(state: State) {
-    // await this.#cleanup(state);
-    const lookup = this.#createReverseLookup(state.subscriptions);
-    const channelsBatch = this.#nextBatchOfChannels(state.youtubeChannels);
-    const newContent = await this.#getNewContentForBatch(
-      state.youtubeChannels,
-      channelsBatch
+    const subsToUpdate = await getSubscriptionsForChannelIds(
+      channelIdsWithUpdates
     );
+
     const sendPromises: Promise<void>[] = [];
-    for (const [channelId, msgTxt] of newContent) {
-      const scopes = lookup.get(channelId);
-      if (scopes !== undefined) {
-        for (const scopeStr of scopes) {
-          const scope = ActionScope.fromString(scopeStr) as ChatActionScope;
-          const location = chatIdentifierToInstallationLocation(scope.chat);
-          const installation = state.installs.get(location);
-          if (
-            installation === undefined ||
-            !installation.grantedAutonomousPermissions.hasMessagePermission(
-              "Text"
-            )
-          ) {
-            continue;
-          }
-          sendPromises.push(
-            this.#sendNewContentForSubscription(
-              installation.apiGateway,
-              installation.grantedAutonomousPermissions,
-              scope,
-              channelId,
-              msgTxt
-            )
-          );
-        }
+    for (const {
+      apiGateway,
+      autonomousPermissions,
+      scope,
+      channelId,
+    } of subsToUpdate) {
+      const msgText = newContent.get(channelId);
+      if (
+        !autonomousPermissions.hasMessagePermission("Text") ||
+        msgText === undefined
+      ) {
+        continue;
       }
+      sendPromises.push(
+        this.#sendNewContentForSubscription(
+          apiGateway,
+          autonomousPermissions,
+          scope,
+          channelId,
+          msgText
+        )
+      );
     }
     await sendPromises;
   }
 
   async #getNewContentForBatch(
-    channels: Map<string, ChannelStats>,
-    batch: Map<string, number>
+    channels: { channelId: string; lastUpdated: bigint }[]
   ): Promise<Map<string, string>> {
     console.log(
       "Checking for new content for the following channels: ",
-      batch.keys()
+      channels
     );
-    const timestamp = Date.now();
     const results = new Map<string, string>();
     await Promise.all(
-      [...batch.entries()].map(([channelId, lastUpdated]) =>
-        getVideosSince(channelId, lastUpdated).then((msg) => {
+      channels.map((channel) =>
+        getVideosSince(channel.channelId, channel.lastUpdated).then((msg) => {
           if (msg !== undefined) {
-            results.set(channelId, msg);
-            this.#updateChannel(channels, channelId, timestamp);
+            results.set(channel.channelId, msg);
           }
         })
       )
@@ -407,9 +226,9 @@ class Subscriptions {
   }
 
   async refresh() {
-    await withState(async (state) => {
+    withPool(async () => {
       try {
-        await this.#processQueue(state);
+        await this.#processQueue();
       } catch (err) {
         console.error("Error processing subscriptions", err);
       }

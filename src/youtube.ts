@@ -14,14 +14,14 @@ const youtube = google.youtube({
 export async function getMostRecentVideo(
   channelId: string
 ): Promise<string | undefined> {
-  let msgs = await getVideosSinceViaRSS(channelId, 0);
+  let msgs = await getVideosSinceViaRSS(channelId, 0n);
   if (msgs === undefined) {
-    msgs = await getVideosSinceFromGoogle(channelId, 0);
+    msgs = await getVideosSinceFromGoogle(channelId, 0n);
   }
   return msgs?.[0];
 }
 
-export async function getVideosSince(channelId: string, since: number) {
+export async function getVideosSince(channelId: string, since: bigint) {
   // prefer RSS
   let msgs = await getVideosSinceViaRSS(channelId, since);
   if (msgs === undefined) {
@@ -32,7 +32,7 @@ export async function getVideosSince(channelId: string, since: number) {
 
 async function getVideosSinceFromGoogle(
   channelId: string,
-  since: number
+  since: bigint
 ): Promise<string[] | undefined> {
   const res = await youtube.search.list({
     part: ["id", "snippet"],
@@ -40,7 +40,7 @@ async function getVideosSinceFromGoogle(
     maxResults: 10,
     order: "date",
     type: ["video"],
-    publishedAfter: new Date(since).toISOString(),
+    publishedAfter: new Date(Number(since)).toISOString(),
   });
 
   const msgs: string[] = [];
@@ -58,7 +58,7 @@ async function getVideosSinceFromGoogle(
 
 async function getVideosSinceViaRSS(
   channelId: string,
-  since: number
+  since: bigint
 ): Promise<string[] | undefined> {
   try {
     const feed = await parser.parseURL(

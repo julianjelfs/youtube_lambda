@@ -17,6 +17,7 @@ export async function subscribe(
         `The supplied parameter "${channel}" does not look like a valid Youtube channel ID. It should begin with "UC" and be followed by 22 characters. For information on how to find the channel ID for a channel please [check the readme](https://github.com/julianjelfs/youtube_lambda/blob/main/README.md).`
       );
     }
+
     if (!(await subscriptions.subscribe(channel, scope))) {
       return ephemeralResponse(
         client,

@@ -68,7 +68,7 @@ export function formatSubscriptionsList(subscriptions: ChannelStats[]): string {
       (msgs, sub) => {
         msgs.push(
           `${formatChannelId(sub.youtubeChannelId)} (${new Date(
-            sub.lastUpdated
+            Number(sub.lastUpdated)
           ).toISOString()})`
         );
         return msgs;

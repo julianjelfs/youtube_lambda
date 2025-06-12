@@ -11,13 +11,20 @@
   "description": "",
   "devDependencies": {
     "@types/aws-lambda": "^8.10.149",
+    "@types/pg": "^8.15.4",
+    "drizzle-kit": "^0.31.1",
     "serverless": "^4.15.1",
+    "tsx": "^4.20.2",
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.1",
     "@open-ic/openchat-botclient-ts": "^1.0.55",
+    "drizzle-orm": "^0.44.2",
     "firebase-admin": "^13.4.0",
     "googleapis": "^148.0.0",
-    "rss-parser": "^3.13.0"
+    "pg": "^8.16.0",
+    "rss-parser": "^3.13.0",
+    "ws": "^8.18.2"
   }
 }
