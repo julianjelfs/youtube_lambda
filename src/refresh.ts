@@ -5,6 +5,7 @@ import {
   subscribedChannelIds,
   updateYoutubeChannel,
   withPool,
+  withTransaction,
 } from "./db/database";
 import { ephemeralResponse } from "./helpers";
 import { sendNewContentForSubscription } from "./send";
@@ -15,36 +16,43 @@ export async function refreshCommand(
 ): Promise<APIGatewayProxyResultV2> {
   await withPool(async () => {
     const scope = client.scope as ChatActionScope;
-    const installation = await getInstallation(scope);
-    if (
-      installation === undefined ||
-      !installation.grantedAutonomousPermissions.hasMessagePermission("Text")
-    ) {
-      return;
-    }
 
-    const channels = await subscribedChannelIds(scope);
-
-    if (channels) {
-      try {
-        for (const { youtubeChannelId, lastUpdated } of channels) {
-          const msgTxt = await getVideosSince(youtubeChannelId, lastUpdated);
-          if (msgTxt === undefined) continue;
-
-          await updateYoutubeChannel(youtubeChannelId, BigInt(Date.now()));
-
-          await sendNewContentForSubscription(
-            installation.apiGateway,
-            installation.grantedAutonomousPermissions,
-            scope,
-            youtubeChannelId,
-            msgTxt
-          );
-        }
-      } catch (err) {
-        console.error("Error processing subscriptions", err);
+    await withTransaction(async (tx) => {
+      const installation = await getInstallation(tx, scope);
+      if (
+        installation === undefined ||
+        !installation.grantedAutonomousPermissions.hasMessagePermission("Text")
+      ) {
+        return;
       }
-    }
+
+      const channels = await subscribedChannelIds(tx, scope);
+
+      if (channels) {
+        try {
+          for (const { youtubeChannelId, lastUpdated } of channels) {
+            const msgTxt = await getVideosSince(youtubeChannelId, lastUpdated);
+            if (msgTxt === undefined) continue;
+
+            await updateYoutubeChannel(
+              tx,
+              youtubeChannelId,
+              BigInt(Date.now())
+            );
+
+            await sendNewContentForSubscription(
+              installation.apiGateway,
+              installation.grantedAutonomousPermissions,
+              scope,
+              youtubeChannelId,
+              msgTxt
+            );
+          }
+        } catch (err) {
+          console.error("Error processing subscriptions", err);
+        }
+      }
+    });
   });
 
   return ephemeralResponse(

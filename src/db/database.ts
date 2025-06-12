@@ -18,6 +18,12 @@ neonConfig.webSocketConstructor = ws;
 const pool = new Pool({ connectionString: process.env.PG_CONNECTION });
 const db = drizzle({ client: pool, schema });
 
+export type Tx = Parameters<typeof db.transaction>[0] extends (
+  tx: infer T
+) => any
+  ? T
+  : never;
+
 type RawPermissions = {
   chat: number;
   community: number;
@@ -25,13 +31,14 @@ type RawPermissions = {
 };
 
 export async function getInstallation(
+  tx: Tx,
   scope: ChatActionScope
 ): Promise<InstallationRecord | undefined> {
   const location = chatIdentifierToInstallationLocation(scope.chat);
   const locationKey = keyify(location);
 
   // check that we are installed in this location
-  const install = await db.query.installations.findFirst({
+  const install = await tx.query.installations.findFirst({
     where: (i, { eq }) => eq(i.location, locationKey),
   });
 
@@ -48,14 +55,12 @@ export async function saveInstallation(
   location: InstallationLocation,
   record: InstallationRecord
 ) {
-  const installation: typeof installations.$inferInsert = {
+  await db.insert(schema.installations).values({
     location: keyify(location),
     api_gateway: record.apiGateway,
     autonomousPermissions: record.grantedAutonomousPermissions.rawPermissions,
     commandPermissions: record.grantedCommandPermissions,
-  };
-
-  await db.insert(installations).values(installation);
+  });
 }
 
 export async function uninstall(location: InstallationLocation) {
@@ -145,6 +150,14 @@ export async function hasSubscription(
   return sub !== undefined;
 }
 
+export async function withTransaction<T>(
+  fn: (tx: Tx) => Promise<T>
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    return fn(tx);
+  });
+}
+
 export async function withPool<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
@@ -153,18 +166,23 @@ export async function withPool<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-export async function updateYoutubeChannel(channelId, lastUpdated: bigint) {
-  await db
+export async function updateYoutubeChannel(
+  tx: Tx,
+  channelId,
+  lastUpdated: bigint
+) {
+  await tx
     .update(schema.youtubeChannels)
     .set({ last_updated: lastUpdated })
     .where(eq(schema.youtubeChannels.youtube_channel, channelId));
 }
 
 export async function subscribedChannelIds(
+  tx: Tx,
   scope: ChatActionScope
 ): Promise<ChannelStats[]> {
   const scopeKey = keyify(scope);
-  const rows = await db
+  const rows = await tx
     .select({
       channelId: schema.subscriptionChannels.channel_id,
       lastUpdated: schema.youtubeChannels.last_updated,
@@ -185,8 +203,8 @@ export async function subscribedChannelIds(
   }));
 }
 
-export async function pruneChannels() {
-  await db.execute(sql`
+export async function pruneChannels(tx: Tx) {
+  await tx.execute(sql`
         DELETE FROM "YOUTUBE_CHANNELS"
         WHERE NOT EXISTS (
           SELECT 1 FROM "SUBSCRIPTION_CHANNELS"
@@ -196,16 +214,17 @@ export async function pruneChannels() {
 }
 
 export async function updateChannelsLastUpdate(
+  tx: Tx,
   channelIds: string[],
   lastUpdated: bigint
 ) {
-  db.update(schema.youtubeChannels)
+  tx.update(schema.youtubeChannels)
     .set({ last_updated: lastUpdated })
     .where(inArray(schema.youtubeChannels.youtube_channel, channelIds));
 }
 
-export async function getBatchOfChannels() {
-  return db
+export async function getBatchOfChannels(tx: Tx) {
+  return tx
     .select({
       channelId: schema.youtubeChannels.youtube_channel,
       lastUpdated: schema.youtubeChannels.last_updated,
@@ -215,8 +234,11 @@ export async function getBatchOfChannels() {
     .limit(50);
 }
 
-export async function getSubscriptionsForChannelIds(channelIds: string[]) {
-  const rows = await db
+export async function getSubscriptionsForChannelIds(
+  tx: Tx,
+  channelIds: string[]
+) {
+  const rows = await tx
     .select({
       apiGateway: schema.installations.api_gateway,
       autonomousPermissions: schema.installations.autonomousPermissions,

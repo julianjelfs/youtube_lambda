@@ -3,8 +3,10 @@ import {
   getBatchOfChannels,
   getSubscriptionsForChannelIds,
   pruneChannels,
+  Tx,
   updateChannelsLastUpdate,
   withPool,
+  withTransaction,
 } from "./db/database";
 import { sendNewContentForSubscription } from "./send";
 import { getVideosSince } from "./youtube";
@@ -12,7 +14,7 @@ import { getVideosSince } from "./youtube";
 export const poll: APIGatewayProxyHandlerV2 = async (_) => {
   await withPool(async () => {
     try {
-      await processQueue();
+      await withTransaction((tx) => processQueue(tx));
     } catch (err) {
       console.error("Error processing subscriptions", err);
     }
@@ -24,14 +26,15 @@ export const poll: APIGatewayProxyHandlerV2 = async (_) => {
   };
 };
 
-async function processQueue() {
-  await pruneChannels();
-  const channels = await getBatchOfChannels();
+async function processQueue(tx: Tx) {
+  await pruneChannels(tx);
+  const channels = await getBatchOfChannels(tx);
   const newContent = await getNewContentForBatch(channels);
   const channelIdsWithUpdates = [...newContent.keys()];
-  await updateChannelsLastUpdate(channelIdsWithUpdates, BigInt(Date.now()));
+  await updateChannelsLastUpdate(tx, channelIdsWithUpdates, BigInt(Date.now()));
 
   const subsToUpdate = await getSubscriptionsForChannelIds(
+    tx,
     channelIdsWithUpdates
   );
 
