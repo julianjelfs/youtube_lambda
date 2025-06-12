@@ -55,12 +55,22 @@ export async function saveInstallation(
   location: InstallationLocation,
   record: InstallationRecord
 ) {
-  await db.insert(schema.installations).values({
-    location: keyify(location),
-    api_gateway: record.apiGateway,
-    autonomousPermissions: record.grantedAutonomousPermissions.rawPermissions,
-    commandPermissions: record.grantedCommandPermissions,
-  });
+  await db
+    .insert(schema.installations)
+    .values({
+      location: keyify(location),
+      api_gateway: record.apiGateway,
+      autonomousPermissions: record.grantedAutonomousPermissions.rawPermissions,
+      commandPermissions: record.grantedCommandPermissions.rawPermissions,
+    })
+    .onConflictDoUpdate({
+      target: schema.installations.location,
+      set: {
+        autonomousPermissions:
+          record.grantedAutonomousPermissions.rawPermissions,
+        commandPermissions: record.grantedCommandPermissions.rawPermissions,
+      },
+    });
 }
 
 export async function uninstall(location: InstallationLocation) {
@@ -99,10 +109,7 @@ export async function subscribe(
         youtube_channel: channelId,
         last_updated: BigInt(new Date().getTime()),
       })
-      .onConflictDoUpdate({
-        target: schema.youtubeChannels.youtube_channel,
-        set: { last_updated: BigInt(new Date().getTime()) },
-      });
+      .onConflictDoNothing();
 
     // insert the link
     await tx
