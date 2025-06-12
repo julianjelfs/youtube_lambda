@@ -15,7 +15,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@open-ic/openchat-botclient-ts": "^1.0.36",
+    "@open-ic/openchat-botclient-ts": "^1.0.55",
     "firebase-admin": "^13.4.0",
     "googleapis": "^148.0.0",
     "rss-parser": "^3.13.0"
