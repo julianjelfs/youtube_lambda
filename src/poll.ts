@@ -31,7 +31,7 @@ async function processQueue(tx: Tx) {
   const channels = await getBatchOfChannels(tx);
   const newContent = await getNewContentForBatch(channels);
   const channelIdsWithUpdates = [...newContent.keys()];
-  await updateChannelsLastUpdate(tx, channelIdsWithUpdates, BigInt(Date.now()));
+  await updateChannelsLastUpdate(tx, channelIdsWithUpdates, Date.now());
 
   const subsToUpdate = await getSubscriptionsForChannelIds(
     tx,
@@ -66,7 +66,7 @@ async function processQueue(tx: Tx) {
 }
 
 async function getNewContentForBatch(
-  channels: { channelId: string; lastUpdated: bigint }[]
+  channels: { channelId: string; lastUpdated: number | null }[]
 ): Promise<Map<string, string>> {
   console.log(
     "Checking for new content for the following channels: ",
@@ -75,11 +75,13 @@ async function getNewContentForBatch(
   const results = new Map<string, string>();
   await Promise.all(
     channels.map((channel) =>
-      getVideosSince(channel.channelId, channel.lastUpdated).then((msg) => {
-        if (msg !== undefined) {
-          results.set(channel.channelId, msg);
+      getVideosSince(channel.channelId, channel.lastUpdated ?? 0).then(
+        (msg) => {
+          if (msg !== undefined) {
+            results.set(channel.channelId, msg);
+          }
         }
-      })
+      )
     )
   );
   return results;

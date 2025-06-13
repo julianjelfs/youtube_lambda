@@ -3,7 +3,7 @@ import { InstallationRegistry } from "@open-ic/openchat-botclient-ts";
 export type ChannelStats = {
   youtubeChannelId: string;
   subscribers: number;
-  lastUpdated: bigint;
+  lastUpdated: number;
 };
 
 export type State = {

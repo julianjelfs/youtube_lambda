@@ -20,6 +20,7 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.0.1",
     "@open-ic/openchat-botclient-ts": "^1.0.55",
+    "dotenv": "^16.5.0",
     "drizzle-orm": "^0.44.2",
     "firebase-admin": "^13.4.0",
     "googleapis": "^148.0.0",

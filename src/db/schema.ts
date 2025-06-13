@@ -7,9 +7,15 @@ import {
   text,
 } from "drizzle-orm/pg-core";
 
+export const youtubeChannels = pgTable("YOUTUBE_CHANNELS", {
+  youtubeChannel: text("youtube_channel").primaryKey().notNull(),
+  // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+  lastUpdated: bigint("last_updated", { mode: "number" }),
+});
+
 export const installations = pgTable("INSTALLATIONS", {
-  location: text("location").primaryKey(),
-  api_gateway: text("api_gateway").notNull(),
+  location: text().primaryKey().notNull(),
+  apiGateway: text("api_gateway").notNull(),
   commandPermissions: json("command_permissions").notNull(),
   autonomousPermissions: json("autonomous_permissions").notNull(),
 });
@@ -17,42 +23,38 @@ export const installations = pgTable("INSTALLATIONS", {
 export const subscriptions = pgTable(
   "SUBSCRIPTIONS",
   {
-    location: text("location")
-      .notNull()
-      .references(() => installations.location),
-    scope: text("scope").notNull(),
+    location: text().notNull(),
+    scope: text().notNull(),
   },
   (table) => [
-    primaryKey({ name: "pk", columns: [table.location, table.scope] }),
+    foreignKey({
+      columns: [table.location],
+      foreignColumns: [installations.location],
+      name: "installation_location",
+    }).onDelete("cascade"),
+    primaryKey({
+      columns: [table.location, table.scope],
+      name: "location_scope",
+    }),
   ]
 );
 
 export const subscriptionChannels = pgTable(
   "SUBSCRIPTION_CHANNELS",
   {
-    location: text("location").notNull(),
-    scope: text("scope").notNull(),
-    channel_id: text("channel_id").notNull(),
+    location: text().notNull(),
+    scope: text().notNull(),
+    channelId: text("channel_id").notNull(),
   },
   (table) => [
-    primaryKey({
-      name: "pk",
-      columns: [table.location, table.scope, table.channel_id],
-    }),
     foreignKey({
       columns: [table.location, table.scope],
       foreignColumns: [subscriptions.location, subscriptions.scope],
       name: "fk",
-    }),
-    foreignKey({
-      columns: [table.channel_id],
-      foreignColumns: [youtubeChannels.youtube_channel],
-      name: "fk2",
+    }).onDelete("cascade"),
+    primaryKey({
+      columns: [table.location, table.scope, table.channelId],
+      name: "pk",
     }),
   ]
 );
-
-export const youtubeChannels = pgTable("YOUTUBE_CHANNELS", {
-  youtube_channel: text("youtube_channel").primaryKey(),
-  last_updated: bigint("last_updated", { mode: "bigint" }).notNull(),
-});

@@ -34,11 +34,7 @@ export async function refreshCommand(
             const msgTxt = await getVideosSince(youtubeChannelId, lastUpdated);
             if (msgTxt === undefined) continue;
 
-            await updateYoutubeChannel(
-              tx,
-              youtubeChannelId,
-              BigInt(Date.now())
-            );
+            await updateYoutubeChannel(tx, youtubeChannelId, Date.now());
 
             await sendNewContentForSubscription(
               installation.apiGateway,

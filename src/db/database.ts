@@ -45,7 +45,7 @@ export async function getInstallation(
   if (install === undefined) return undefined;
 
   return new InstallationRecord(
-    install.api_gateway,
+    install.apiGateway,
     new Permissions(install.commandPermissions as RawPermissions),
     new Permissions(install.autonomousPermissions as RawPermissions)
   );
@@ -59,7 +59,7 @@ export async function saveInstallation(
     .insert(schema.installations)
     .values({
       location: keyify(location),
-      api_gateway: record.apiGateway,
+      apiGateway: record.apiGateway,
       autonomousPermissions: record.grantedAutonomousPermissions.rawPermissions,
       commandPermissions: record.grantedCommandPermissions.rawPermissions,
     })
@@ -106,15 +106,15 @@ export async function subscribe(
     await tx
       .insert(schema.youtubeChannels)
       .values({
-        youtube_channel: channelId,
-        last_updated: BigInt(new Date().getTime()),
+        youtubeChannel: channelId,
+        lastUpdated: new Date().getTime(),
       })
       .onConflictDoNothing();
 
     // insert the link
     await tx
       .insert(schema.subscriptionChannels)
-      .values({ location: locationKey, scope: scopeKey, channel_id: channelId })
+      .values({ location: locationKey, scope: scopeKey, channelId: channelId })
       .onConflictDoNothing();
   });
 
@@ -134,7 +134,7 @@ export async function unsubscribe(
       and(
         eq(schema.subscriptionChannels.location, locationKey),
         eq(schema.subscriptionChannels.scope, scopeKey),
-        eq(schema.subscriptionChannels.channel_id, youtubeChannelId)
+        eq(schema.subscriptionChannels.channelId, youtubeChannelId)
       )
     );
 }
@@ -151,7 +151,7 @@ export async function hasSubscription(
       and(
         eq(i.location, locationKey),
         eq(i.scope, scopeKey),
-        eq(i.channel_id, channeId)
+        eq(i.channelId, channeId)
       ),
   });
   return sub !== undefined;
@@ -169,19 +169,21 @@ export async function withPool<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } finally {
-    await pool.end();
+    if (process.env.NODE_ENV === "development") {
+      await pool.end();
+    }
   }
 }
 
 export async function updateYoutubeChannel(
   tx: Tx,
   channelId,
-  lastUpdated: bigint
+  lastUpdated: number
 ) {
   await tx
     .update(schema.youtubeChannels)
-    .set({ last_updated: lastUpdated })
-    .where(eq(schema.youtubeChannels.youtube_channel, channelId));
+    .set({ lastUpdated: lastUpdated })
+    .where(eq(schema.youtubeChannels.youtubeChannel, channelId));
 }
 
 export async function subscribedChannelIds(
@@ -191,21 +193,21 @@ export async function subscribedChannelIds(
   const scopeKey = keyify(scope);
   const rows = await tx
     .select({
-      channelId: schema.subscriptionChannels.channel_id,
-      lastUpdated: schema.youtubeChannels.last_updated,
+      channelId: schema.subscriptionChannels.channelId,
+      lastUpdated: schema.youtubeChannels.lastUpdated,
     })
     .from(schema.subscriptionChannels)
     .innerJoin(
       schema.youtubeChannels,
       eq(
-        schema.subscriptionChannels.channel_id,
-        schema.youtubeChannels.youtube_channel
+        schema.subscriptionChannels.channelId,
+        schema.youtubeChannels.youtubeChannel
       )
     )
     .where(eq(schema.subscriptionChannels.scope, scopeKey));
   return rows.map((r) => ({
     youtubeChannelId: r.channelId,
-    lastUpdated: r.lastUpdated,
+    lastUpdated: r.lastUpdated ?? 0,
     subscribers: 0,
   }));
 }
@@ -223,21 +225,21 @@ export async function pruneChannels(tx: Tx) {
 export async function updateChannelsLastUpdate(
   tx: Tx,
   channelIds: string[],
-  lastUpdated: bigint
+  lastUpdated: number
 ) {
   tx.update(schema.youtubeChannels)
-    .set({ last_updated: lastUpdated })
-    .where(inArray(schema.youtubeChannels.youtube_channel, channelIds));
+    .set({ lastUpdated: lastUpdated })
+    .where(inArray(schema.youtubeChannels.youtubeChannel, channelIds));
 }
 
 export async function getBatchOfChannels(tx: Tx) {
   return tx
     .select({
-      channelId: schema.youtubeChannels.youtube_channel,
-      lastUpdated: schema.youtubeChannels.last_updated,
+      channelId: schema.youtubeChannels.youtubeChannel,
+      lastUpdated: schema.youtubeChannels.lastUpdated,
     })
     .from(schema.youtubeChannels)
-    .orderBy(asc(schema.youtubeChannels.last_updated))
+    .orderBy(asc(schema.youtubeChannels.lastUpdated))
     .limit(50);
 }
 
@@ -247,17 +249,17 @@ export async function getSubscriptionsForChannelIds(
 ) {
   const rows = await tx
     .select({
-      apiGateway: schema.installations.api_gateway,
+      apiGateway: schema.installations.apiGateway,
       autonomousPermissions: schema.installations.autonomousPermissions,
       scope: schema.subscriptionChannels.scope,
-      channelId: schema.subscriptionChannels.channel_id,
+      channelId: schema.subscriptionChannels.channelId,
     })
     .from(schema.installations)
     .innerJoin(
       schema.subscriptionChannels,
       eq(schema.installations.location, schema.subscriptionChannels.location)
     )
-    .where(inArray(schema.subscriptionChannels.channel_id, channelIds));
+    .where(inArray(schema.subscriptionChannels.channelId, channelIds));
 
   return rows.map((r) => ({
     apiGateway: r.apiGateway,
