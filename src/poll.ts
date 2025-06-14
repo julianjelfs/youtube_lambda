@@ -1,9 +1,9 @@
+import { ChatActionScope, Permissions } from "@open-ic/openchat-botclient-ts";
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
 import {
   getBatchOfChannels,
   getSubscriptionsForChannelIds,
   pruneChannels,
-  Tx,
   updateChannelsLastUpdate,
   withPool,
   withTransaction,
@@ -14,7 +14,7 @@ import { getVideosSince } from "./youtube";
 export const poll: APIGatewayProxyHandlerV2 = async (_) => {
   await withPool(async () => {
     try {
-      await withTransaction((tx) => processQueue(tx));
+      await processQueue();
     } catch (err) {
       console.error("Error processing subscriptions", err);
     }
@@ -26,17 +26,26 @@ export const poll: APIGatewayProxyHandlerV2 = async (_) => {
   };
 };
 
-async function processQueue(tx: Tx) {
-  await pruneChannels(tx);
-  const channels = await getBatchOfChannels(tx);
-  const newContent = await getNewContentForBatch(channels);
-  const channelIdsWithUpdates = [...newContent.keys()];
-  await updateChannelsLastUpdate(tx, channelIdsWithUpdates, Date.now());
+async function processQueue() {
+  let newContent: Map<string, string> = new Map();
+  let subsToUpdate: {
+    apiGateway: string;
+    autonomousPermissions: Permissions;
+    scope: ChatActionScope;
+    channelId: string;
+  }[] = [];
 
-  const subsToUpdate = await getSubscriptionsForChannelIds(
-    tx,
-    channelIdsWithUpdates
-  );
+  await withTransaction(async (tx) => {
+    await pruneChannels(tx);
+    const channels = await getBatchOfChannels(tx);
+    newContent = await getNewContentForBatch(channels);
+    const channelIdsWithUpdates = [...newContent.keys()];
+    await updateChannelsLastUpdate(tx, channelIdsWithUpdates, Date.now());
+    subsToUpdate = await getSubscriptionsForChannelIds(
+      tx,
+      channelIdsWithUpdates
+    );
+  });
 
   const sendPromises: Promise<void>[] = [];
   for (const {
@@ -62,7 +71,7 @@ async function processQueue(tx: Tx) {
       )
     );
   }
-  await sendPromises;
+  await Promise.all(sendPromises);
 }
 
 async function getNewContentForBatch(
