@@ -11,6 +11,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import ws from "ws";
 import { ChannelStats } from "../types";
+import { getChannelName } from "../youtube";
 import * as schema from "./schema";
 import { installations } from "./schema";
 
@@ -81,7 +82,7 @@ export async function uninstall(location: InstallationLocation) {
 export async function subscribe(
   channelId: string,
   scope: ChatActionScope
-): Promise<boolean> {
+): Promise<ChannelStats | undefined> {
   const location = chatIdentifierToInstallationLocation(scope.chat);
   const locationKey = keyify(location);
   const scopeKey = keyify(scope);
@@ -92,8 +93,11 @@ export async function subscribe(
   });
 
   if (install === undefined) {
-    return false;
+    return undefined;
   }
+
+  const name = await getChannelName(channelId);
+  const now = new Date().getTime();
 
   await db.transaction(async (tx) => {
     // insert subscription
@@ -107,9 +111,13 @@ export async function subscribe(
       .insert(schema.youtubeChannels)
       .values({
         youtubeChannel: channelId,
-        lastUpdated: new Date().getTime(),
+        lastUpdated: now,
+        name,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: schema.youtubeChannels.youtubeChannel,
+        set: { name },
+      });
 
     // insert the link
     await tx
@@ -118,7 +126,11 @@ export async function subscribe(
       .onConflictDoNothing();
   });
 
-  return true;
+  return {
+    youtubeChannelId: channelId,
+    lastUpdated: now,
+    name,
+  };
 }
 
 export async function unsubscribe(
@@ -195,6 +207,7 @@ export async function subscribedChannelIds(
     .select({
       channelId: schema.subscriptionChannels.channelId,
       lastUpdated: schema.youtubeChannels.lastUpdated,
+      name: schema.youtubeChannels.name,
     })
     .from(schema.subscriptionChannels)
     .innerJoin(
@@ -208,7 +221,7 @@ export async function subscribedChannelIds(
   return rows.map((r) => ({
     youtubeChannelId: r.channelId,
     lastUpdated: r.lastUpdated ?? 0,
-    subscribers: 0,
+    name: r.name ?? undefined,
   }));
 }
 

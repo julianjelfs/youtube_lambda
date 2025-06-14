@@ -67,7 +67,7 @@ export function formatSubscriptionsList(subscriptions: ChannelStats[]): string {
     .reduce(
       (msgs, sub) => {
         msgs.push(
-          `${formatChannelId(sub.youtubeChannelId)} (${new Date(
+          `${formatChannelId(sub.youtubeChannelId, sub.name)} (${new Date(
             Number(sub.lastUpdated)
           ).toISOString()})`
         );
@@ -78,8 +78,8 @@ export function formatSubscriptionsList(subscriptions: ChannelStats[]): string {
     .join("\n");
 }
 
-export function formatChannelId(channelId: string): string {
-  return `[${channelId}](https://www.youtube.com/channel/${channelId})`;
+export function formatChannelId(channelId: string, name?: string): string {
+  return `[${name ?? channelId}](https://www.youtube.com/channel/${channelId})`;
 }
 
 export async function ephemeralResponse(client: BotClient, txt: string) {

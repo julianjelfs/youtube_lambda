@@ -19,7 +19,7 @@ export async function subscribe(
     }
 
     const subscribed = await withPool(() => dbSubscribe(channel, scope));
-    if (!subscribed) {
+    if (subscribed === undefined) {
       return ephemeralResponse(
         client,
         "This bot does not seem to be installed in this scope at the moment"
@@ -28,7 +28,10 @@ export async function subscribe(
 
     return ephemeralResponse(
       client,
-      `You are now subscribed to YouTube channel: ${formatChannelId(channel)}`
+      `You are now subscribed to YouTube channel: ${formatChannelId(
+        channel,
+        subscribed.name
+      )}`
     );
   } else {
     return ephemeralResponse(

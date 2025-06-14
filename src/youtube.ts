@@ -21,6 +21,19 @@ export async function getMostRecentVideo(
   return msgs?.[0];
 }
 
+export async function getChannelName(
+  channelId: string
+): Promise<string | undefined> {
+  try {
+    const feed = await parser.parseURL(
+      `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`
+    );
+    return feed.title;
+  } catch (_) {
+    return undefined;
+  }
+}
+
 export async function getVideosSince(channelId: string, since: number) {
   // prefer RSS
   let msgs = await getVideosSinceViaRSS(channelId, since);
