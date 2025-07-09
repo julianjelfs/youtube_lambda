@@ -5,7 +5,7 @@ import { list } from "./list";
 import { mostrecent } from "./mostrecent";
 import { refreshCommand } from "./refresh";
 import { subscribe } from "./subscribe";
-import { unsubscribe } from "./unsubscribe";
+import { unsubscribe, unsubscribeAll } from "./unsubscribe";
 
 export const command: APIGatewayProxyHandlerV2 = async (event) => {
   return withBotClient(event, async (client) => {
@@ -20,6 +20,8 @@ export const command: APIGatewayProxyHandlerV2 = async (event) => {
         return subscribe(client);
       case "unsubscribe":
         return unsubscribe(client);
+      case "unsubscribe_all":
+        return unsubscribeAll(client);
       default:
         return badRequest(commandNotFound());
     }

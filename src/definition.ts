@@ -126,6 +126,13 @@ function schema() {
           },
         ],
       },
+      {
+        name: "unsubscribe_all",
+        default_role: "Owner",
+        description: "Unsubscribe from all YouTube channels in this scope",
+        permissions: Permissions.encodePermissions(emptyPermissions),
+        params: [],
+      },
     ],
   };
 }

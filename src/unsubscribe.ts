@@ -1,7 +1,26 @@
 import { BotClient, ChatActionScope } from "@open-ic/openchat-botclient-ts";
 import { APIGatewayProxyResultV2 } from "aws-lambda";
-import { unsubscribe as dbUnsubscribe, withPool } from "./db/database";
+import {
+  unsubscribe as dbUnsubscribe,
+  unsubscribeAll as dbUnsubscribeAll,
+  withPool,
+} from "./db/database";
 import { ephemeralResponse, formatChannelId } from "./helpers";
+
+export async function unsubscribeAll(
+  client: BotClient
+): Promise<APIGatewayProxyResultV2> {
+  const scope = client.scope as ChatActionScope;
+
+  await withPool(async () => {
+    await dbUnsubscribeAll(scope);
+  });
+
+  return ephemeralResponse(
+    client,
+    `You are now unsubscribed from all YouTube channels`
+  );
+}
 
 export async function unsubscribe(
   client: BotClient

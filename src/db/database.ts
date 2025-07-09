@@ -133,6 +133,20 @@ export async function subscribe(
   };
 }
 
+export async function unsubscribeAll(scope: ChatActionScope) {
+  const location = chatIdentifierToInstallationLocation(scope.chat);
+  const locationKey = keyify(location);
+  const scopeKey = keyify(scope);
+  await db
+    .delete(schema.subscriptionChannels)
+    .where(
+      and(
+        eq(schema.subscriptionChannels.location, locationKey),
+        eq(schema.subscriptionChannels.scope, scopeKey)
+      )
+    );
+}
+
 export async function unsubscribe(
   youtubeChannelId: string,
   scope: ChatActionScope
@@ -181,7 +195,7 @@ export async function withPool<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } finally {
-    if (process.env.NODE_ENV === "development") {
+    if (process.env.MODE === "development") {
       await pool.end();
     }
   }
