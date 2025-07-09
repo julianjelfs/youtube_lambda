@@ -56,10 +56,11 @@ export async function saveInstallation(
   location: InstallationLocation,
   record: InstallationRecord
 ) {
+  const locationKey = keyify(location);
   await db
     .insert(schema.installations)
     .values({
-      location: keyify(location),
+      location: locationKey,
       apiGateway: record.apiGateway,
       autonomousPermissions: record.grantedAutonomousPermissions.rawPermissions,
       commandPermissions: record.grantedCommandPermissions.rawPermissions,
