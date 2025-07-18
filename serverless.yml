@@ -54,7 +54,7 @@ functions:
           path: /poll
           method: get
       - schedule:
-          rate: rate(10 minutes)
+          rate: rate(30 minutes)
 
 plugins:
 
