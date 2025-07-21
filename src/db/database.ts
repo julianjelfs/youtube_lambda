@@ -1,4 +1,3 @@
-import { neonConfig, Pool } from "@neondatabase/serverless";
 import {
   ActionScope,
   ChatActionScope,
@@ -8,15 +7,17 @@ import {
   Permissions,
 } from "@open-ic/openchat-botclient-ts";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/neon-serverless";
-import ws from "ws";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import { ChannelStats } from "../types";
 import { getChannelName } from "../youtube";
 import * as schema from "./schema";
 import { installations } from "./schema";
 
-neonConfig.webSocketConstructor = ws;
-const pool = new Pool({ connectionString: process.env.PG_CONNECTION });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }, // optional, depends on config
+});
 const db = drizzle({ client: pool, schema });
 
 export type Tx = Parameters<typeof db.transaction>[0] extends (

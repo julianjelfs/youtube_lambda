@@ -1,0 +1,6 @@
+prod:
+  - schedule:
+      rate: cron(0 12 * * ? *) # daily at noon UTC
+      enabled: true
+      input:
+        source: cron
