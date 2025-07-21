@@ -7,9 +7,9 @@ export async function list(
   client: BotClient
 ): Promise<APIGatewayProxyResultV2> {
   const scope = client.scope as ChatActionScope;
-  const channelStats = await withPool(() =>
-    withTransaction((tx) => subscribedChannelIds(tx, scope))
-  );
+  const channelStats = await withPool(() => {
+    return withTransaction((tx) => subscribedChannelIds(tx, scope));
+  });
   const txt =
     channelStats.length === 0
       ? "You are not currently subscribed to any youtube channels"

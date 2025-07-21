@@ -15,7 +15,7 @@ import * as schema from "./schema";
 import { installations } from "./schema";
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.PG_CONNECTION,
   ssl: { rejectUnauthorized: false }, // optional, depends on config
 });
 const db = drizzle({ client: pool, schema });
@@ -100,6 +100,9 @@ export async function subscribe(
 
   const name = await getChannelName(channelId);
   const now = new Date().getTime();
+  if (name === undefined) {
+    return undefined;
+  }
 
   await db.transaction(async (tx) => {
     // insert subscription
@@ -189,6 +192,7 @@ export async function withTransaction<T>(
   fn: (tx: Tx) => Promise<T>
 ): Promise<T> {
   return db.transaction(async (tx) => {
+    console.log("inside with tx");
     return fn(tx);
   });
 }

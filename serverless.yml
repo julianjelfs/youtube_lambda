@@ -49,6 +49,7 @@ functions:
 
   poll:
     handler: src/poll.poll
+    timeout: 25
     events:
       - httpApi:
           path: /poll
