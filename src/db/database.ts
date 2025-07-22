@@ -6,11 +6,11 @@ import {
   InstallationRecord,
   Permissions,
 } from "@open-ic/openchat-botclient-ts";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { ChannelStats } from "../types";
-import { getChannelName } from "../youtube";
+import { ChannelStats, SubscribeResult } from "../types";
+import { getFeedName } from "../youtube";
 import * as schema from "./schema";
 import { installations } from "./schema";
 
@@ -84,7 +84,7 @@ export async function uninstall(location: InstallationLocation) {
 export async function subscribe(
   channelId: string,
   scope: ChatActionScope
-): Promise<ChannelStats | undefined> {
+): Promise<SubscribeResult> {
   const location = chatIdentifierToInstallationLocation(scope.chat);
   const locationKey = keyify(location);
   const scopeKey = keyify(scope);
@@ -95,14 +95,15 @@ export async function subscribe(
   });
 
   if (install === undefined) {
-    return undefined;
+    return { kind: "not_installed" };
   }
 
-  const name = await getChannelName(channelId);
+  const channel = await getFeedName(channelId);
   const now = new Date().getTime();
-  if (name === undefined) {
-    return undefined;
+  if (channel.kind === "feed_error") {
+    return { kind: "channel_not_found" };
   }
+  const channelName = channel.data;
 
   await db.transaction(async (tx) => {
     // insert subscription
@@ -117,11 +118,11 @@ export async function subscribe(
       .values({
         youtubeChannel: channelId,
         lastUpdated: now,
-        name,
+        name: channelName,
       })
       .onConflictDoUpdate({
         target: schema.youtubeChannels.youtubeChannel,
-        set: { name },
+        set: { name: channelName },
       });
 
     // insert the link
@@ -132,9 +133,12 @@ export async function subscribe(
   });
 
   return {
-    youtubeChannelId: channelId,
-    lastUpdated: now,
-    name,
+    kind: "success",
+    channel: {
+      youtubeChannelId: channelId,
+      lastUpdated: now,
+      name: channelName,
+    },
   };
 }
 
@@ -148,6 +152,17 @@ export async function unsubscribeAll(scope: ChatActionScope) {
       and(
         eq(schema.subscriptionChannels.location, locationKey),
         eq(schema.subscriptionChannels.scope, scopeKey)
+      )
+    );
+}
+
+export async function unsubscribeFailed(tx: Tx) {
+  await tx
+    .delete(schema.subscriptionChannels)
+    .where(
+      inArray(
+        schema.subscriptionChannels.channelId,
+        sql`(SELECT ${schema.youtubeChannels.youtubeChannel} FROM ${schema.youtubeChannels} WHERE ${schema.youtubeChannels.failureCount} > 5)`
       )
     );
 }
@@ -192,7 +207,6 @@ export async function withTransaction<T>(
   fn: (tx: Tx) => Promise<T>
 ): Promise<T> {
   return db.transaction(async (tx) => {
-    console.log("inside with tx");
     return fn(tx);
   });
 }
@@ -266,6 +280,16 @@ export async function updateChannelsLastUpdate(
     .where(inArray(schema.youtubeChannels.youtubeChannel, channelIds));
 }
 
+export async function incrementChannelsFailureCount(
+  tx: Tx,
+  channelIds: string[]
+) {
+  return tx
+    .update(schema.youtubeChannels)
+    .set({ failureCount: sql`${schema.youtubeChannels.failureCount} + 1` })
+    .where(inArray(schema.youtubeChannels.youtubeChannel, channelIds));
+}
+
 export async function getBatchOfChannels(tx: Tx) {
   return tx
     .select({
@@ -273,6 +297,7 @@ export async function getBatchOfChannels(tx: Tx) {
       lastUpdated: schema.youtubeChannels.lastUpdated,
     })
     .from(schema.youtubeChannels)
+    .where(lte(schema.youtubeChannels.failureCount, 10))
     .orderBy(asc(schema.youtubeChannels.lastUpdated))
     .limit(50);
 }

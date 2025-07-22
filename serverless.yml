@@ -35,6 +35,7 @@ functions:
 
   executeCommand:
     handler: src/execute.command
+    timeout: 25
     events:
       - httpApi:
           path: /execute_command

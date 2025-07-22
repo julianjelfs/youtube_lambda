@@ -18,11 +18,18 @@ export async function subscribe(
       );
     }
 
-    const subscribed = await withPool(() => dbSubscribe(channel, scope));
-    if (subscribed === undefined) {
+    const result = await withPool(() => dbSubscribe(channel, scope));
+    if (result.kind === "not_installed") {
       return ephemeralResponse(
         client,
         "This bot does not seem to be installed in this scope at the moment"
+      );
+    }
+
+    if (result.kind === "channel_not_found") {
+      return ephemeralResponse(
+        client,
+        "I can't seem to find that channel - double check the id and try again"
       );
     }
 
@@ -30,7 +37,7 @@ export async function subscribe(
       client,
       `You are now subscribed to YouTube channel: ${formatChannelId(
         channel,
-        subscribed.name
+        result.channel.name ?? result.channel.youtubeChannelId
       )}`
     );
   } else {

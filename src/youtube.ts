@@ -1,63 +1,57 @@
 import Parser from "rss-parser";
+import { FeedData } from "./types";
 
 const parser = new Parser();
 
 export async function getMostRecentVideo(
   channelId: string
-): Promise<string | undefined> {
-  let msgs = await getVideosSinceViaRSS(channelId, 0);
-  return msgs?.[0];
+): Promise<FeedData<string | undefined>> {
+  const msgs = await getVideosSinceViaRSS(channelId, 0);
+  return mapFeedData(msgs, (m) => m[0]);
 }
 
-async function getChannel(
-  channelId: string
-): Promise<Parser.Output<{}> | undefined> {
+function mapFeedData<A, B>(f: FeedData<A>, fn: (a: A) => B): FeedData<B> {
+  if (f.kind === "feed_error") {
+    return f;
+  }
+  return { kind: "feed_data", data: fn(f.data) };
+}
+
+async function getFeedData<T>(
+  channelId: string,
+  extract: (feed: Parser.Output<{}>) => T
+): Promise<FeedData<T>> {
   try {
     const feed = await parser.parseURL(
       `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`
     );
-    return feed;
+    return { kind: "feed_data", data: extract(feed) };
   } catch (err) {
-    // let's come back to this and try to implement it
-    // such that if a feed cannot be loaded 5 times, then we unsubscribe
-    console.log("Error getting rss feed", err, err.message.includes("404"));
-    return undefined;
+    return { kind: "feed_error" };
   }
 }
 
-export async function getChannelName(
+export async function getFeedName(
   channelId: string
-): Promise<string | undefined> {
-  try {
-    const feed = await parser.parseURL(
-      `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`
-    );
-    return feed.title;
-  } catch (err) {
-    console.log("Error getting rss feed", err, err.message.includes("404"));
-    return undefined;
-  }
+): Promise<FeedData<string | undefined>> {
+  return getFeedData(channelId, (f) => f.title);
 }
 
 export async function getVideosSince(
   channelId: string,
   since: number
-): Promise<string | undefined> {
-  let msgs = await getVideosSinceViaRSS(channelId, since);
-  return msgs !== undefined && msgs.length > 0 ? msgs.join("\n") : undefined;
+): Promise<FeedData<string | undefined>> {
+  const msgs = await getVideosSinceViaRSS(channelId, since);
+  return mapFeedData(msgs, (m) => (m.length > 0 ? m.join("\n") : undefined));
 }
 
 async function getVideosSinceViaRSS(
   channelId: string,
   since: number
-): Promise<string[] | undefined> {
-  try {
-    const feed = await parser.parseURL(
-      `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`
-    );
-
+): Promise<FeedData<string[]>> {
+  return getFeedData(channelId, (f) => {
     const msgs: string[] = [];
-    feed.items.forEach((item) => {
+    f.items.forEach((item) => {
       if (
         item.title &&
         item.link &&
@@ -68,13 +62,5 @@ async function getVideosSinceViaRSS(
       }
     });
     return msgs;
-  } catch (err) {
-    console.log(
-      "Error getting RSS feed: ",
-      channelId,
-      err,
-      " falling back to google api"
-    );
-    return undefined;
-  }
+  });
 }

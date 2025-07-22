@@ -31,18 +31,26 @@ export async function refreshCommand(
       if (channels) {
         try {
           for (const { youtubeChannelId, lastUpdated } of channels) {
-            const msgTxt = await getVideosSince(youtubeChannelId, lastUpdated);
-            if (msgTxt === undefined) continue;
+            const feed = await getVideosSince(youtubeChannelId, lastUpdated);
+            if (feed.kind === "feed_error") {
+              return ephemeralResponse(
+                client,
+                "I can't seem to update that feed at the moment. If this problem persists we might have to unsubscribe you. It's possible that the channel got deleted."
+              );
+            } else {
+              const msgTxt = feed.data;
+              if (msgTxt === undefined) continue;
 
-            await updateYoutubeChannel(tx, youtubeChannelId, Date.now());
+              await updateYoutubeChannel(tx, youtubeChannelId, Date.now());
 
-            await sendNewContentForSubscription(
-              installation.apiGateway,
-              installation.grantedAutonomousPermissions,
-              scope,
-              youtubeChannelId,
-              msgTxt
-            );
+              await sendNewContentForSubscription(
+                installation.apiGateway,
+                installation.grantedAutonomousPermissions,
+                scope,
+                youtubeChannelId,
+                msgTxt
+              );
+            }
           }
         } catch (err) {
           console.error("Error processing subscriptions", err);

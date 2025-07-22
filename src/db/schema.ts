@@ -1,6 +1,7 @@
 import {
   bigint,
   foreignKey,
+  integer,
   json,
   pgTable,
   primaryKey,
@@ -10,8 +11,8 @@ import {
 export const youtubeChannels = pgTable("YOUTUBE_CHANNELS", {
   name: text("name"),
   youtubeChannel: text("youtube_channel").primaryKey().notNull(),
-  // You can use { mode: "bigint" } if numbers are exceeding js number limitations
   lastUpdated: bigint("last_updated", { mode: "number" }),
+  failureCount: integer("failure_count").default(0).notNull(),
 });
 
 export const installations = pgTable("INSTALLATIONS", {

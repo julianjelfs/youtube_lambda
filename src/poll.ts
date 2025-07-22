@@ -3,12 +3,14 @@ import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
 import {
   getBatchOfChannels,
   getSubscriptionsForChannelIds,
+  incrementChannelsFailureCount,
   pruneChannels,
   updateChannelsLastUpdate,
   withPool,
   withTransaction,
 } from "./db/database";
 import { sendNewContentForSubscription } from "./send";
+import { FeedData } from "./types";
 import { getVideosSince } from "./youtube";
 
 export const poll: APIGatewayProxyHandlerV2 = async (_) => {
@@ -27,7 +29,7 @@ export const poll: APIGatewayProxyHandlerV2 = async (_) => {
 };
 
 async function processQueue() {
-  let newContent: Map<string, string> = new Map();
+  let newContent: Map<string, FeedData<string | undefined>> = new Map();
   let subsToUpdate: {
     apiGateway: string;
     autonomousPermissions: Permissions;
@@ -36,11 +38,27 @@ async function processQueue() {
   }[] = [];
 
   await withTransaction(async (tx) => {
+    // await unsubscribeFailed(tx);
     await pruneChannels(tx);
-    const channels = await getBatchOfChannels(tx);
-    newContent = await getNewContentForBatch(channels);
-    const channelIdsWithUpdates = [...newContent.keys()];
-    await updateChannelsLastUpdate(tx, channelIdsWithUpdates, Date.now());
+    newContent = await getBatchOfChannels(tx).then(getNewContentForBatch);
+    const [channelIdsWithUpdates, channelIdsInError] = [
+      ...newContent.entries(),
+    ].reduce(
+      ([updated, errors], [key, val]) => {
+        if (val.kind === "feed_data" && val.data !== undefined) {
+          updated.push(key);
+        }
+        if (val.kind === "feed_error") {
+          errors.push(key);
+        }
+        return [updated, errors];
+      },
+      [[], []] as [string[], string[]]
+    );
+    await Promise.all([
+      updateChannelsLastUpdate(tx, channelIdsWithUpdates, Date.now()),
+      incrementChannelsFailureCount(tx, channelIdsInError),
+    ]);
     subsToUpdate = await getSubscriptionsForChannelIds(
       tx,
       channelIdsWithUpdates
@@ -54,10 +72,11 @@ async function processQueue() {
     scope,
     channelId,
   } of subsToUpdate) {
-    const msgText = newContent.get(channelId);
+    const feed = newContent.get(channelId);
     if (
-      !autonomousPermissions.hasMessagePermission("Text") ||
-      msgText === undefined
+      feed?.kind === "feed_error" ||
+      feed?.data === undefined ||
+      !autonomousPermissions.hasMessagePermission("Text")
     ) {
       continue;
     }
@@ -67,7 +86,7 @@ async function processQueue() {
         autonomousPermissions,
         scope,
         channelId,
-        msgText
+        feed.data
       )
     );
   }
@@ -76,18 +95,18 @@ async function processQueue() {
 
 async function getNewContentForBatch(
   channels: { channelId: string; lastUpdated: number | null }[]
-): Promise<Map<string, string>> {
+): Promise<Map<string, FeedData<string | undefined>>> {
   console.log(
     "Checking for new content for the following channels: ",
     channels
   );
-  const results = new Map<string, string>();
+  const results = new Map<string, FeedData<string | undefined>>();
   await Promise.all(
     channels.map((channel) =>
       getVideosSince(channel.channelId, channel.lastUpdated ?? 0).then(
-        (msg) => {
-          if (msg !== undefined) {
-            results.set(channel.channelId, msg);
+        (feed) => {
+          if (feed !== undefined) {
+            results.set(channel.channelId, feed);
           }
         }
       )
