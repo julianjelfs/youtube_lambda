@@ -276,7 +276,7 @@ export async function updateChannelsLastUpdate(
 ) {
   return tx
     .update(schema.youtubeChannels)
-    .set({ lastUpdated: lastUpdated })
+    .set({ lastUpdated: lastUpdated, failureCount: 0 })
     .where(inArray(schema.youtubeChannels.youtubeChannel, channelIds));
 }
 
