@@ -1,6 +1,6 @@
 import {
-  InstallationRecord,
-  parseBotNotification,
+    InstallationRecord,
+    parseBotNotification,
 } from "@open-ic/openchat-botclient-ts";
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
 import { saveInstallation, uninstall, withPool } from "./db/database";

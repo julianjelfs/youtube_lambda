@@ -22,7 +22,6 @@ provider:
     IDENTITY_PRIVATE: ${env:IDENTITY_PRIVATE}
     IC_HOST: ${env:IC_HOST}
     STORAGE_INDEX_CANISTER: ${env:STORAGE_INDEX_CANISTER}
-    YOUTUBE_API_KEY: ${env:YOUTUBE_API_KEY}
     PG_CONNECTION: ${env:PG_CONNECTION}
 
 functions:
@@ -57,8 +56,6 @@ functions:
           method: get
       - schedule:
           rate: rate(30 minutes)
-
-plugins:
 
 build:
   esbuild:
