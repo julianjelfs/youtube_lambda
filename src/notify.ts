@@ -4,17 +4,25 @@ import {
   handleNotification,
   InstallationRecord,
 } from "@open-ic/openchat-botclient-ts";
-import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
+import type {
+  APIGatewayProxyEventV2,
+  APIGatewayProxyHandlerV2,
+} from "aws-lambda";
 import { saveInstallation, uninstall, withPool } from "./db/database";
 import { factory } from "./factory";
 
+function getRawBytes(event: APIGatewayProxyEventV2): Buffer {
+  return Buffer.from(event.body!, event.isBase64Encoded ? "base64" : "utf-8");
+}
+
 export const notify: APIGatewayProxyHandlerV2 = async (event) => {
   return handleNotification(
-    event.body!,
+    event.headers["x-oc-signature"] as string,
+    getRawBytes(event),
     factory,
     async (client: BotClient, ev: BotEvent, apiGateway: string) => {
+      console.log("Did we get here ok?", ev);
       if (ev.kind === "bot_installed_event") {
-        console.log("installing: ", ev.location);
         const location = ev.location;
         const record = new InstallationRecord(
           apiGateway,

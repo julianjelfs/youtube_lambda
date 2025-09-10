@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.1",
-    "@open-ic/openchat-botclient-ts": "^1.0.60",
+    "@open-ic/openchat-botclient-ts": "^1.0.61",
     "dotenv": "^16.5.0",
     "drizzle-orm": "^0.44.2",
     "pg": "^8.16.0",
