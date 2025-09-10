@@ -21,7 +21,6 @@ export const notify: APIGatewayProxyHandlerV2 = async (event) => {
     getRawBytes(event),
     factory,
     async (client: BotClient, ev: BotEvent, apiGateway: string) => {
-      console.log("Did we get here ok?", ev);
       if (ev.kind === "bot_installed_event") {
         const location = ev.location;
         const record = new InstallationRecord(
