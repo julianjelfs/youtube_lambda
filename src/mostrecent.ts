@@ -23,8 +23,9 @@ export async function mostrecent(
     return getMostRecentVideo(channelId);
   });
 
-  const txt =
-    msg === undefined ? "I couldn't find any content for this channel" : msg;
+  if(msg === undefined || msg.kind === "feed_error" || msg.data === undefined) {
+      return ephemeralResponse(client, "I couldn't find any content for this channel");
+  }
 
-  return ephemeralResponse(client, txt);
+    return ephemeralResponse(client, msg.data);
 }
