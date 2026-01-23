@@ -31,17 +31,11 @@ export async function prompt(
             { role: "user", content: prompt },
         ];
 
-        console.log("Sending initial prompt", prompt);
         let response = await openai.responses.create({
             model: "gpt-3.5-turbo",
             tools: functions,
             input,
         });
-
-        console.log(
-            "Received initial response",
-            JSON.stringify(response.output),
-        );
 
         let result = "";
 
@@ -77,30 +71,10 @@ export async function prompt(
                         scope,
                         JSON.parse(item.arguments).channelId,
                     );
-
-                    // Note that we are explicitly *not* feeding the function output back into the model at the moment
-                    // We are *deliberately* using the model as a fancy parser.
-                    // console.log("Providing function call output", result);
-                    // input.push({
-                    //     type: "function_call_output",
-                    //     call_id: item.call_id,
-                    //     output: JSON.stringify(result),
-                    // });
                 }
             }
         }
 
-        // Since we are not feeding function output back into the model, there is no need to get the final response from the model
-        // response = await openai.responses.create({
-        //     model: "gpt-5",
-        //     instructions:
-        //         "Respond with message reporting whether the subscription succeeded or not",
-        //     tools: functions,
-        //     input,
-        // });
-        console.log("Gathered all responses", result);
-
-        // return ephemeralResponse(client, JSON.stringify(response.output_text));
         return ephemeralResponse(client, result);
     } else {
         return ephemeralResponse(
