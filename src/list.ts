@@ -4,16 +4,19 @@ import { subscribedChannelIds, withPool, withTransaction } from "./db/database";
 import { ephemeralResponse, formatSubscriptionsList } from "./helpers";
 
 export async function list(
-  client: BotClient
+    client: BotClient,
 ): Promise<APIGatewayProxyResultV2> {
-  const scope = client.scope as ChatActionScope;
-  const channelStats = await withPool(() => {
-    return withTransaction((tx) => subscribedChannelIds(tx, scope));
-  });
-  const txt =
-    channelStats.length === 0
-      ? "You are not currently subscribed to any youtube channels"
-      : formatSubscriptionsList(channelStats);
+    const scope = client.scope as ChatActionScope;
+    return ephemeralResponse(client, await list_subscriptions(scope));
+}
 
-  return ephemeralResponse(client, txt);
+export async function list_subscriptions(scope: ChatActionScope) {
+    const channelStats = await withPool(() => {
+        return withTransaction((tx) => subscribedChannelIds(tx, scope));
+    });
+    const txt =
+        channelStats.length === 0
+            ? "You are not currently subscribed to any youtube channels"
+            : formatSubscriptionsList(channelStats);
+    return txt;
 }

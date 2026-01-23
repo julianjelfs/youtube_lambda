@@ -1,49 +1,45 @@
 import { BotClient, ChatActionScope } from "@open-ic/openchat-botclient-ts";
 import { APIGatewayProxyResultV2 } from "aws-lambda";
 import { subscribe as dbSubscribe, withPool } from "./db/database";
-import { ephemeralResponse, formatChannelId } from "./helpers";
+import {
+    ephemeralResponse,
+    formatChannelId,
+    validateChannelId,
+} from "./helpers";
 
 export async function subscribe(
-  client: BotClient
+    client: BotClient,
 ): Promise<APIGatewayProxyResultV2> {
-  const channel = client.stringArg("channel_id");
-  const scope = client.scope as ChatActionScope;
+    const channel = client.stringArg("channel_id");
+    const scope = client.scope as ChatActionScope;
 
-  if (channel) {
-    const valid = /^UC[a-zA-Z0-9_-]{22}$/.test(channel);
-    if (!valid) {
-      return ephemeralResponse(
+    return ephemeralResponse(
         client,
-        `The supplied parameter "${channel}" does not look like a valid Youtube channel ID. It should begin with "UC" and be followed by 22 characters. For information on how to find the channel ID for a channel please [check the readme](https://github.com/julianjelfs/youtube_lambda/blob/main/README.md).`
-      );
+        await subscribe_to_channel(scope, channel),
+    );
+}
+
+export async function subscribe_to_channel(
+    scope: ChatActionScope,
+    channelId?: string,
+): Promise<string> {
+    const invalid = validateChannelId(channelId);
+    if (invalid) {
+        return invalid;
     }
 
-    const result = await withPool(() => dbSubscribe(channel, scope));
+    const result = await withPool(() => dbSubscribe(channelId!, scope));
     if (result.kind === "not_installed") {
-      return ephemeralResponse(
-        client,
-        "This bot does not seem to be installed in this scope at the moment"
-      );
+        return "This bot does not seem to be install in this scope at the moment";
     }
 
     if (result.kind === "channel_not_found") {
-      return ephemeralResponse(
-        client,
-        "I can't seem to find that channel - double check the id and try again"
-      );
+        return "I can't seem to find that channel - double check the id and try again";
     }
-
-    return ephemeralResponse(
-      client,
-      `You are now subscribed to YouTube channel: ${formatChannelId(
-        channel,
-        result.channel.name ?? result.channel.youtubeChannelId
-      )}`
+    return Promise.resolve(
+        `You are now subscribed to YouTube channel: ${formatChannelId(
+            channelId!,
+            result.channel.name ?? result.channel.youtubeChannelId,
+        )}`,
     );
-  } else {
-    return ephemeralResponse(
-      client,
-      "You must provide a YouTube channel to subscribe to"
-    );
-  }
 }

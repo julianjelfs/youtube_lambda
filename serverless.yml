@@ -3,64 +3,65 @@ service: youtube-lambda
 frameworkVersion: "4"
 
 provider:
-  name: aws
-  runtime: nodejs20.x
-  region: eu-west-2 # or your preferred region
-  httpApi:
-    cors:
-      allowedOrigins:
-        - "*"
-      allowedHeaders:
-        - "*"
-      allowedMethods:
-        - GET
-        - OPTIONS
-        - POST
+    name: aws
+    runtime: nodejs20.x
+    region: eu-west-2 # or your preferred region
+    httpApi:
+        cors:
+            allowedOrigins:
+                - "*"
+            allowedHeaders:
+                - "*"
+            allowedMethods:
+                - GET
+                - OPTIONS
+                - POST
 
-  environment:
-    OC_PUBLIC: ${env:OC_PUBLIC}
-    IDENTITY_PRIVATE: ${env:IDENTITY_PRIVATE}
-    IC_HOST: ${env:IC_HOST}
-    STORAGE_INDEX_CANISTER: ${env:STORAGE_INDEX_CANISTER}
-    PG_CONNECTION: ${env:PG_CONNECTION}
+    environment:
+        OC_PUBLIC: ${env:OC_PUBLIC}
+        IDENTITY_PRIVATE: ${env:IDENTITY_PRIVATE}
+        IC_HOST: ${env:IC_HOST}
+        STORAGE_INDEX_CANISTER: ${env:STORAGE_INDEX_CANISTER}
+        PG_CONNECTION: ${env:PG_CONNECTION}
+        OPENAI_API_KEY: ${env:OPENAI_API_KEY}
 
 functions:
-  botDefinition:
-    handler: src/definition.definition
-    events:
-      - httpApi:
-          path: /bot_definition
-          method: get
+    botDefinition:
+        handler: src/definition.definition
+        events:
+            - httpApi:
+                  path: /bot_definition
+                  method: get
 
-  executeCommand:
-    handler: src/execute.command
-    timeout: 25
-    events:
-      - httpApi:
-          path: /execute_command
-          method: post
+    executeCommand:
+        handler: src/execute.command
+        timeout: 25
+        events:
+            - httpApi:
+                  path: /execute_command
+                  method: post
 
-  notify:
-    handler: src/notify.notify
-    events:
-      - httpApi:
-          path: /notify
-          method: post
+    notify:
+        handler: src/notify.notify
+        events:
+            - httpApi:
+                  path: /notify
+                  method: post
 
-  poll:
-    handler: src/poll.poll
-    timeout: 25
-    events:
-      - httpApi:
-          path: /poll
-          method: get
-      - schedule:
-          rate: rate(30 minutes)
+    poll:
+        handler: src/poll.poll
+        timeout: 25
+        events:
+            - httpApi:
+                  path: /poll
+                  method: get
+            - schedule:
+                  rate: rate(30 minutes)
 
 build:
-  esbuild:
-    bundle: true
-    minify: true
-    sourcemap: false
-    target: node20
-    platform: node
+    esbuild:
+        bundle: true
+        minify: true
+        sourcemap: false
+        target: node20
+        platform: node

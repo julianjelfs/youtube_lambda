@@ -4,85 +4,96 @@
  * See the readme for more explanation.
  */
 import {
-  BadRequest,
-  BotClient,
-  BotClientFactory,
-  Message,
+    BadRequest,
+    BotClient,
+    BotClientFactory,
+    Message,
 } from "@open-ic/openchat-botclient-ts";
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { ChannelStats } from "./types";
 
 export function withBotClient(
-  event: APIGatewayProxyEventV2,
-  fn: (client: BotClient) => Promise<APIGatewayProxyResultV2>
+    event: APIGatewayProxyEventV2,
+    fn: (client: BotClient) => Promise<APIGatewayProxyResultV2>,
 ) {
-  const jwt = event.headers["x-oc-jwt"];
-  if (!jwt) {
-    return {
-      statusCode: 400,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-      },
-      body: JSON.stringify({ error: "Missing x-oc-jwt header" }),
-    };
-  }
-  const client = createCommandChatClient(jwt);
-  return fn(client);
+    const jwt = event.headers["x-oc-jwt"];
+    if (!jwt) {
+        return {
+            statusCode: 400,
+            headers: {
+                "Access-Control-Allow-Origin": "*",
+            },
+            body: JSON.stringify({ error: "Missing x-oc-jwt header" }),
+        };
+    }
+    const client = createCommandChatClient(jwt);
+    return fn(client);
 }
 
 export function badRequest(msg: BadRequest) {
-  return {
-    statusCode: 400,
-    body: msg,
-  };
+    return {
+        statusCode: 400,
+        body: msg,
+    };
 }
 
 export function success(msg: Message) {
-  return {
-    statusCode: 200,
-    body: JSON.stringify({
-      message: msg?.toResponse(),
-    }),
-  };
+    return {
+        statusCode: 200,
+        body: JSON.stringify({
+            message: msg?.toResponse(),
+        }),
+    };
 }
 
 function botClientFactory(): BotClientFactory {
-  return new BotClientFactory({
-    openchatPublicKey: process.env.OC_PUBLIC!,
-    icHost: process.env.IC_HOST!,
-    identityPrivateKey: process.env.IDENTITY_PRIVATE!,
-    openStorageCanisterId: process.env.STORAGE_INDEX_CANISTER!,
-  });
+    return new BotClientFactory({
+        openchatPublicKey: process.env.OC_PUBLIC!,
+        icHost: process.env.IC_HOST!,
+        identityPrivateKey: process.env.IDENTITY_PRIVATE!,
+        openStorageCanisterId: process.env.STORAGE_INDEX_CANISTER!,
+    });
 }
 
 export function createCommandChatClient(token: string): BotClient {
-  const factory = botClientFactory();
-  const client = factory.createClientFromCommandJwt(token as string);
-  console.log("Bot client created");
-  return client;
+    const factory = botClientFactory();
+    const client = factory.createClientFromCommandJwt(token as string);
+    console.log("Bot client created");
+    return client;
 }
 
 export function formatSubscriptionsList(subscriptions: ChannelStats[]): string {
-  return subscriptions
-    .reduce(
-      (msgs, sub) => {
-        msgs.push(
-          `${formatChannelId(sub.youtubeChannelId, sub.name)} (${new Date(
-            Number(sub.lastUpdated)
-          ).toISOString()})`
-        );
-        return msgs;
-      },
-      ["You are subscribed to the following channel IDs: ", ""]
-    )
-    .join("\n");
+    return subscriptions
+        .reduce(
+            (msgs, sub) => {
+                msgs.push(
+                    `${formatChannelId(sub.youtubeChannelId, sub.name)} (${new Date(
+                        Number(sub.lastUpdated),
+                    ).toISOString()})`,
+                );
+                return msgs;
+            },
+            ["You are subscribed to the following channel IDs: ", ""],
+        )
+        .join("\n");
 }
 
 export function formatChannelId(channelId: string, name?: string): string {
-  return `[${name ?? channelId}](https://www.youtube.com/channel/${channelId})`;
+    return `[${name ?? channelId}](https://www.youtube.com/channel/${channelId})`;
 }
 
 export async function ephemeralResponse(client: BotClient, txt: string) {
-  const msg = (await client.createTextMessage(txt)).makeEphemeral();
-  return success(msg);
+    const msg = (await client.createTextMessage(txt)).makeEphemeral();
+    return success(msg);
+}
+
+export function validateChannelId(channelId?: string) {
+    if (!channelId) {
+        return "You must include a single valid channelId somewhere in your request";
+    }
+    const valid = /^UC[a-zA-Z0-9_-]{22}$/.test(channelId);
+    if (!valid) {
+        return `The supplied parameter "${channelId}" does not look like a valid Youtube channel ID. It should begin with "UC" and be followed by 22 characters. For information on how to find the channel ID for a channel please [check the readme](https://github.com/julianjelfs/youtube_lambda/blob/main/README.md).`;
+    }
+    return undefined;
 }

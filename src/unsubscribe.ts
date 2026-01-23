@@ -1,48 +1,57 @@
 import { BotClient, ChatActionScope } from "@open-ic/openchat-botclient-ts";
 import { APIGatewayProxyResultV2 } from "aws-lambda";
 import {
-  unsubscribe as dbUnsubscribe,
-  unsubscribeAll as dbUnsubscribeAll,
-  withPool,
+    unsubscribe as dbUnsubscribe,
+    unsubscribeAll as dbUnsubscribeAll,
+    withPool,
 } from "./db/database";
-import { ephemeralResponse, formatChannelId } from "./helpers";
+import {
+    ephemeralResponse,
+    formatChannelId,
+    validateChannelId,
+} from "./helpers";
 
 export async function unsubscribeAll(
-  client: BotClient
+    client: BotClient,
 ): Promise<APIGatewayProxyResultV2> {
-  const scope = client.scope as ChatActionScope;
-
-  await withPool(async () => {
-    await dbUnsubscribeAll(scope);
-  });
-
-  return ephemeralResponse(
-    client,
-    `You are now unsubscribed from all YouTube channels`
-  );
+    const scope = client.scope as ChatActionScope;
+    return ephemeralResponse(client, await unsubscribe_all(scope));
 }
 
 export async function unsubscribe(
-  client: BotClient
+    client: BotClient,
 ): Promise<APIGatewayProxyResultV2> {
-  const channel = client.stringArg("channel_id");
-  const scope = client.scope as ChatActionScope;
+    const channel = client.stringArg("channel_id");
+    const scope = client.scope as ChatActionScope;
 
-  if (channel) {
+    return ephemeralResponse(
+        client,
+        await unsubscribe_from_channel(scope, channel),
+    );
+}
+
+export async function unsubscribe_all(scope: ChatActionScope): Promise<string> {
     await withPool(async () => {
-      await dbUnsubscribe(channel, scope);
+        await dbUnsubscribeAll(scope);
     });
+    return Promise.resolve(
+        `You are now unsubscribed from all YouTube channels`,
+    );
+}
 
-    return ephemeralResponse(
-      client,
-      `You are now unsubscribed from YouTube channel: ${formatChannelId(
-        channel
-      )}`
+export async function unsubscribe_from_channel(
+    scope: ChatActionScope,
+    channelId?: string,
+): Promise<string> {
+    const invalid = validateChannelId(channelId);
+    if (invalid) {
+        return invalid;
+    }
+
+    await withPool(() => dbUnsubscribe(channelId!, scope));
+    return Promise.resolve(
+        `You are now unsubscribed from YouTube channel: ${formatChannelId(
+            channelId!,
+        )}`,
     );
-  } else {
-    return ephemeralResponse(
-      client,
-      "You must provide a YouTube channel to unsubscribe from"
-    );
-  }
 }

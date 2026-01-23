@@ -22,6 +22,7 @@
     "@open-ic/openchat-botclient-ts": "^1.0.64",
     "dotenv": "^16.5.0",
     "drizzle-orm": "^0.44.2",
+    "openai": "^6.16.0",
     "pg": "^8.16.0",
     "rss-parser": "^3.13.0"
   }
