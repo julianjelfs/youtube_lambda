@@ -13,6 +13,7 @@ export const youtubeChannels = pgTable("YOUTUBE_CHANNELS", {
   youtubeChannel: text("youtube_channel").primaryKey().notNull(),
   lastUpdated: bigint("last_updated", { mode: "number" }),
   failureCount: integer("failure_count").default(0).notNull(),
+  lastAttempt: bigint("last_attempt", { mode: "number" }),
 });
 
 export const installations = pgTable("INSTALLATIONS", {

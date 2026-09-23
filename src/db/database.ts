@@ -6,7 +6,7 @@ import {
     InstallationRecord,
     Permissions,
 } from "@open-ic/openchat-botclient-ts";
-import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { ChannelStats, SubscribeResult } from "../types";
@@ -235,7 +235,11 @@ export async function updateYoutubeChannel(
 ) {
     await tx
         .update(schema.youtubeChannels)
-        .set({ lastUpdated: lastUpdated })
+        .set({
+            lastUpdated: lastUpdated,
+            failureCount: 0,
+            lastAttempt: lastUpdated,
+        })
         .where(eq(schema.youtubeChannels.youtubeChannel, channelId));
 }
 
@@ -283,29 +287,46 @@ export async function updateChannelsLastUpdate(
 ) {
     return tx
         .update(schema.youtubeChannels)
-        .set({ lastUpdated: lastUpdated, failureCount: 0 })
+        .set({
+            lastUpdated: lastUpdated,
+            failureCount: 0,
+            lastAttempt: lastUpdated,
+        })
         .where(inArray(schema.youtubeChannels.youtubeChannel, channelIds));
 }
 
 export async function incrementChannelsFailureCount(
     tx: Tx,
     channelIds: string[],
+    attemptedAt: number,
 ) {
     return tx
         .update(schema.youtubeChannels)
-        .set({ failureCount: sql`${schema.youtubeChannels.failureCount} + 1` })
+        .set({
+            failureCount: sql`${schema.youtubeChannels.failureCount} + 1`,
+            lastAttempt: attemptedAt,
+        })
         .where(inArray(schema.youtubeChannels.youtubeChannel, channelIds));
 }
 
-export async function getBatchOfChannels(tx: Tx) {
+// A failing channel waits POLL_INTERVAL_MS * 2^failures (capped) before it
+// is retried, so it never becomes permanently unreachable and a success
+// always gets the chance to reset its failure count.
+const POLL_INTERVAL_MS = 30 * 60 * 1000;
+const MAX_BACKOFF_EXPONENT = 6;
+
+export async function getBatchOfChannels(tx: Tx, now: number) {
+    const c = schema.youtubeChannels;
     return tx
         .select({
-            channelId: schema.youtubeChannels.youtubeChannel,
-            lastUpdated: schema.youtubeChannels.lastUpdated,
+            channelId: c.youtubeChannel,
+            lastUpdated: c.lastUpdated,
         })
-        .from(schema.youtubeChannels)
-        .where(lte(schema.youtubeChannels.failureCount, 10))
-        .orderBy(asc(schema.youtubeChannels.lastUpdated))
+        .from(c)
+        .where(
+            sql`${c.lastAttempt} IS NULL OR ${c.lastAttempt} + ${POLL_INTERVAL_MS}::bigint * power(2, least(${c.failureCount}, ${MAX_BACKOFF_EXPONENT}))::bigint <= ${now}`,
+        )
+        .orderBy(sql`${c.lastAttempt} ASC NULLS FIRST`, asc(c.lastUpdated))
         .limit(50);
 }
 

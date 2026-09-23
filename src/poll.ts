@@ -40,7 +40,10 @@ async function processQueue() {
     await withTransaction(async (tx) => {
         // await unsubscribeFailed(tx);
         await pruneChannels(tx);
-        newContent = await getBatchOfChannels(tx).then(getNewContentForBatch);
+        const now = Date.now();
+        newContent = await getBatchOfChannels(tx, now).then(
+            getNewContentForBatch,
+        );
         const [channelIdsWithUpdates, channelIdsInError] = [
             ...newContent.entries(),
         ].reduce(
@@ -56,8 +59,8 @@ async function processQueue() {
             [[], []] as [string[], string[]],
         );
         await Promise.all([
-            updateChannelsLastUpdate(tx, channelIdsWithUpdates, Date.now()),
-            incrementChannelsFailureCount(tx, channelIdsInError),
+            updateChannelsLastUpdate(tx, channelIdsWithUpdates, now),
+            incrementChannelsFailureCount(tx, channelIdsInError, now),
         ]);
         subsToUpdate = await getSubscriptionsForChannelIds(
             tx,
@@ -101,16 +104,20 @@ async function getNewContentForBatch(
         channels,
     );
     const results = new Map<string, FeedData<string | undefined>>();
-    await Promise.all(
-        channels.map((channel) =>
-            getVideosSince(channel.channelId, channel.lastUpdated ?? 0).then(
-                (feed) => {
-                    if (feed !== undefined) {
-                        results.set(channel.channelId, feed);
-                    }
-                },
-            ),
-        ),
-    );
+    const queue = [...channels];
+    // Limit concurrent requests so we don't get rate limited by YouTube
+    const workers = Array.from({ length: FETCH_CONCURRENCY }, async () => {
+        let channel;
+        while ((channel = queue.shift()) !== undefined) {
+            const feed = await getVideosSince(
+                channel.channelId,
+                channel.lastUpdated ?? 0,
+            );
+            results.set(channel.channelId, feed);
+        }
+    });
+    await Promise.all(workers);
     return results;
 }
+
+const FETCH_CONCURRENCY = 10;

@@ -1,7 +1,7 @@
 import Parser from "rss-parser";
 import { FeedData } from "./types";
 
-const parser = new Parser();
+const parser = new Parser({ timeout: 5000 });
 
 export async function getMostRecentVideo(
   channelId: string
@@ -27,6 +27,7 @@ async function getFeedData<T>(
     );
     return { kind: "feed_data", data: extract(feed) };
   } catch (err) {
+    console.error(`Failed to fetch feed for channel ${channelId}:`, err);
     return { kind: "feed_error" };
   }
 }
